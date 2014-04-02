@@ -11,13 +11,23 @@
 -include("exml_stream.hrl").
 
 -export([new_parser/0,
+         new_parser/1,
          parse/2,
          reset_parser/1,
          free_parser/1]).
 -export_type([parser/0]).
+-export_type([parser_type/0]).
+
+%% single_doc - the old way one document: <stream:stream> ..... </stream:stream>
+%% multiple_docs - xmpp over websockets(IETF 89) replaces <stream:..> tags with
+%% <open/> <close/>. As a result we have a stream of multiple xml documents instead of one document.
+%% This type of parser can handle that stream.
+%% see: http://datatracker.ietf.org/doc/draft-ietf-xmpp-websocket/?include_text=1
+-type parser_type() :: single_doc | multiple_docs.
 
 -record(parser, {
         event_parser,
+        type,
         stack = []
 }).
 
@@ -29,9 +39,13 @@
 
 -spec new_parser() -> {ok, #parser{}} | {error, any()}.
 new_parser() ->
+    new_parser(single_doc).
+
+-spec new_parser(parser_type()) -> {ok, #parser{}} | {error, any()}.
+new_parser(Type)->
     case exml_event:new_parser() of
         {ok, EventParser} ->
-            {ok, #parser{event_parser=EventParser}};
+            prepare_parser(#parser{event_parser = EventParser, type = Type});
         {error, Error} ->
             {error, Error}
     end.
@@ -48,11 +62,11 @@ parse(#parser{event_parser = EventParser, stack = OldStack} = Parser, Input) ->
     end.
 
 -spec reset_parser(#parser{}) -> {ok, #parser{}} | {error, any()}.
-reset_parser(#parser{event_parser=EventParser}) ->
+reset_parser(#parser{event_parser=EventParser}=Parser) ->
     case exml_event:reset_parser(EventParser) of
         ok ->
             %% drop all the state except event_parser
-            {ok, #parser{event_parser=EventParser}};
+            prepare_parser(#parser{event_parser = EventParser, type = Parser#parser.type});
         Error ->
             {error, Error}
     end.
@@ -64,6 +78,16 @@ free_parser(#parser{event_parser = EventParser}) ->
 %%%===================================================================
 %%% Helpers
 %%%===================================================================
+-spec prepare_parser(#parser{}) -> {ok, #parser{}}.
+prepare_parser(#parser{type = single_doc} = Parser) ->
+    {ok,Parser};
+prepare_parser(#parser{type = multiple_docs} = Parser) ->
+    %% open fake stream tag and discard events
+    %% use random bytes to reduce probability of closing the tag by user
+    <<I:128/integer>> = crypto:rand_bytes(16),
+    Tag = list_to_binary(erlang:integer_to_list(I,16)),
+    {ok, NewParser, _ } = parse(Parser, <<"<_",Tag/binary,">">>),
+    {ok, NewParser}.
 
 -spec parse_events(list(), list(), list()) -> {list(xmlstreamelement()), list()}.
 parse_events([], Stack, Acc) ->
