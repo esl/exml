@@ -1,4 +1,11 @@
 .PHONY: rel deps test
+INCLUDE_FILES=$(shell escript tools/get_included_files_h.erl)
+CFLAGS_LINUX = -shared -fPIC -lexpat $(INCLUDE_FILES)
+CFLAGS_DARWIN = -undefined dynamic_lookup -lexpat -fPIC $(INCLUDE_FILES)
+EXML_EVENT_IN=c_src/exml_event.c
+EXML_EVENT_OUT=priv/exml_event.so
+EXML_ESCAPE_IN=c_src/exml_escape.c
+EXML_ESCAPE_OUT=priv/exml_escape.so
 
 all: deps compile
 
@@ -40,3 +47,22 @@ exml_plt: dialyzer/exml.plt
 dialyzer: erlang_plt exml_plt
 	@dialyzer --plts dialyzer/*.plt --no_check_plt \
 	--get_warnings -o dialyzer/error.log ebin
+
+
+shared_libs_linux: shared_event_l shared_escape_l
+shared_libs_darwin: shared_event_d shared_escape_d
+
+shared_event_l: $(EXML_EVENT_IN)
+	gcc  -o $(EXML_EVENT_OUT)  $(EXML_EVENT_IN) $(CFLAGS_LINUX)
+shared_escape_l:  $(EXML_ESCAPE)
+	gcc  -o $(EXML_ESCAPE_OUT)  $(EXML_ESCAPE_IN) $(CFLAGS_LINUX)
+
+shared_event_d: $(EXML_EVENT_IN)
+	gcc  -o $(EXML_EVENT_OUT)  $(EXML_EVENT_IN) $(CFLAGS_DARWIN)
+shared_escape_d:  $(EXML_ESCAPE)
+	gcc  -o $(EXML_ESCAPE_OUT)  $(EXML_ESCAPE_IN) $(CFLAGS_DARWIN)
+
+shared_clean:
+	rm XML_EVENT_OUT
+	rm XML_ESCAPE_OUT
+
