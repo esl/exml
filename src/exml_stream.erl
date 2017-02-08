@@ -85,7 +85,7 @@ parse(#parser{event_parser = EventParser, stack = OldStack, config = Config} = P
 reset_parser(#parser{event_parser = EventParser, config = Config}) ->
     try
         exml_event:reset_parser(EventParser),
-        %% drop all the state except event_parser
+            %% drop all the state except event_parser
         {ok, #parser{event_parser = EventParser, config = Config}}
     catch
         E:R ->

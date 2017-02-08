@@ -26,6 +26,10 @@
 
 -on_load(load/0).
 
+%% Maximum bytes passed to the NIF handler at once
+%% Current value is erlang:system_info(context_reductions) * 10
+-define(MAX_BYTES_TO_NIF, 20000).
+
 -export_type([attr/0,
               cdata/0,
               element/0,
@@ -162,11 +166,15 @@ parse(XML) ->
 
 -spec escape_cdata(iodata()) -> cdata().
 escape_cdata(Content) ->
-    #xmlcdata{content = escape_cdata_nif(Content)}.
+    BContent = list_to_binary([Content]),
+    NewContent = feed_nif(fun escape_cdata_nif/1, BContent,
+                          byte_size(BContent), []),
+    #xmlcdata{content = NewContent}.
 
 -spec unescape_cdata(cdata()) -> binary().
 unescape_cdata(#xmlcdata{content = Content}) ->
-    unescape_cdata_nif(Content).
+    BContent = list_to_binary([Content]),
+    feed_nif(fun unescape_cdata_nif/1, BContent, byte_size(BContent), []).
 
 -spec unescape_cdata_as(binary|list|iodata, cdata()) -> binary().
 unescape_cdata_as(What, CData) ->
@@ -189,11 +197,20 @@ unescape_cdata_as_erl(What, #xmlcdata{content=GtEsc}) ->
 
 -spec escape_attr(binary()) -> binary().
 escape_attr(Text) ->
-    escape_attr_nif(Text).
+    feed_nif(fun escape_attr_nif/1, Text, byte_size(Text), []).
 
 -spec unescape_attr(binary()) -> binary().
 unescape_attr(Text) ->
-    unescape_attr_nif(Text).
+    feed_nif(fun unescape_attr_nif/1, Text, byte_size(Text), []).
+
+-spec feed_nif(function(), binary(), integer(), list()) -> binary().
+feed_nif(Fun, Text, Size, Acc) when Size > ?MAX_BYTES_TO_NIF ->
+    <<Chunk:?MAX_BYTES_TO_NIF/binary, Rest/binary>> = Text,
+    Resp = Fun(Chunk),
+    feed_nif(Fun, Rest, Size - ?MAX_BYTES_TO_NIF, [Resp | Acc]);
+feed_nif(Fun, Text, _Size, Acc) ->
+    Resp = Fun(Text),
+    list_to_binary(lists:reverse([Resp | Acc])).
 
 -spec escape_attr_nif(binary()) -> binary().
 escape_attr_nif(_Data) ->
@@ -202,4 +219,3 @@ escape_attr_nif(_Data) ->
 -spec unescape_attr_nif(binary()) -> binary().
 unescape_attr_nif(_Data) ->
     erlang:nif_error({?MODULE, nif_not_loaded}).
-

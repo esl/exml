@@ -62,11 +62,11 @@ OBJECTS = $(addsuffix .o, $(basename $(SOURCES)))
 COMPILE_C = $(c_verbose) $(CC) $(CFLAGS) $(CPPFLAGS) -c
 COMPILE_CPP = $(cpp_verbose) $(CXX) $(CXXFLAGS) $(CPPFLAGS) -c
 
-$(EXML_EVENT): exml_event.o
+$(EXML_EVENT): exml_event.o exml_utils.o
 	@mkdir -p $(BASEDIR)/priv/
 	$(link_verbose) $(CC) $^ $(LDFLAGS) $(LDLIBS) -lexpat -o $@
 
-$(EXML_ESCAPE): exml_escape.o
+$(EXML_ESCAPE): exml_escape.o exml_utils.o
 	@mkdir -p $(BASEDIR)/priv/
 	$(link_verbose) $(CC) $^ $(LDFLAGS) $(LDLIBS) -o $@
 

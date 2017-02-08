@@ -1,6 +1,5 @@
 %%%-------------------------------------------------------------------
-%%% @author Michal Ptaszek <michal.ptaszek@erlang-solutions.com>
-%%% @copyright (C) 2011, Erlang Solutions Ltd.
+%%% @author Michal Ptaszek <michal@ptaszek.net>
 %%% @doc Event-based XML parser
 %%% @end
 %%%-------------------------------------------------------------------
@@ -21,6 +20,13 @@
 
 -on_load(load/0).
 
+%% Maximum bytes passed to the NIF handler at once
+%% Current value is erlang:system_info(context_reductions) * 10
+-define(MAX_BYTES_TO_NIF, 20000).
+
+-define(NOT_FINAL, 0).
+-define(FINAL, 1).
+
 -spec load() -> any().
 load() ->
     PrivDir = case code:priv_dir(?MODULE) of
@@ -33,35 +39,46 @@ load() ->
               end,
     erlang:load_nif(filename:join(PrivDir, "exml_event"), none).
 
--spec new_parser() -> {ok, c_parser()}.
-new_parser() ->
-    erlang:nif_error(not_loaded).
-
--spec reset_parser(c_parser()) -> ok.
-reset_parser(Parser) ->
-    erlang:nif_error(not_loaded, [Parser]).
-
--spec free_parser(c_parser()) -> ok.
-free_parser(Parser) ->
-    erlang:nif_error(not_loaded, [Parser]).
-
 -spec parse(c_parser(), binary()) -> {ok, list()} | {error, string()}.
 parse(Parser, Data) ->
-    do_parse(Parser, Data, 0).
+    do_parse(Parser, Data, ?NOT_FINAL, byte_size(Data), []).
 
 -spec parse_final(c_parser(), binary()) -> {ok, list()} | {error, string()}.
 parse_final(Parser, Data) ->
-    do_parse(Parser, Data, 1).
+    do_parse(Parser, Data, ?FINAL, byte_size(Data), []).
 
--spec do_parse(c_parser(), binary(), 0 | 1) -> {ok, list()} | {error, string()}.
-do_parse(Parser, Data, Final) ->
+-spec do_parse(c_parser(), binary(), 0 | 1, integer(), list()) ->
+    {ok, list()} | {error, string()}.
+do_parse(Parser, Data, Final, Size, Acc) when Size > ?MAX_BYTES_TO_NIF ->
+    <<DataToPass:?MAX_BYTES_TO_NIF/binary, Rest/binary>> = Data,
+    case parse_nif(Parser, DataToPass, ?NOT_FINAL) of
+        {ok, Res} ->
+            do_parse(Parser, Rest, Final, Size - ?MAX_BYTES_TO_NIF,
+                     [lists:reverse(Res) | Acc]);
+        Error ->
+            Error
+    end;
+do_parse(Parser, Data, Final, _Size, Acc) ->
     case parse_nif(Parser, Data, Final) of
         {ok, Res} ->
-            {ok, lists:reverse(Res)};
+            {ok, lists:append(lists:reverse([lists:reverse(Res) | Acc]))};
         Error ->
             Error
     end.
 
+-spec new_parser() -> {ok, c_parser()}.
+new_parser() ->
+    erlang:nif_error({?MODULE, nif_not_loaded}).
+
+-spec reset_parser(c_parser()) -> ok.
+reset_parser(_Parser) ->
+    erlang:nif_error({?MODULE, nif_not_loaded}).
+
+-spec free_parser(c_parser()) -> ok.
+free_parser(_Parser) ->
+    erlang:nif_error({?MODULE, nif_not_loaded}).
+
 -spec parse_nif(c_parser(), binary(), integer()) -> {ok, list()} | {error, string()}.
-parse_nif(Parser, Data, Final) ->
-    erlang:nif_error(not_loaded, [Parser, Data, Final]).
+parse_nif(_Parser, _Data, _Final) ->
+    erlang:nif_error({?MODULE, nif_not_loaded}).
+

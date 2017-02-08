@@ -1,4 +1,4 @@
-#include "exml_escape.h"
+#include "exml.h"
 
 struct buf {
   int limit;
@@ -59,7 +59,7 @@ static int match_tag(ErlNifBinary str, int index, char* tag, int len)
     return(1);
 }
 
-static ERL_NIF_TERM escape_cdata(ErlNifEnv *env, int argc, const ERL_NIF_TERM argv[])
+ERL_NIF_TERM exml_escape_cdata(ErlNifEnv *env, int argc, const ERL_NIF_TERM argv[])
 {
     ErlNifBinary input;
     ERL_NIF_TERM output;
@@ -103,10 +103,12 @@ static ERL_NIF_TERM escape_cdata(ErlNifEnv *env, int argc, const ERL_NIF_TERM ar
     unsigned char* data = enif_make_new_binary(env, rbuf->len, &output);
     memcpy(data, rbuf->b, rbuf->len);
     destroy_buf(env, rbuf);
+    consume_timeslice(env, input);
+
     return output;
 }
 
-static ERL_NIF_TERM unescape_cdata(ErlNifEnv *env, int argc, const ERL_NIF_TERM argv[])
+ERL_NIF_TERM exml_unescape_cdata(ErlNifEnv *env, int argc, const ERL_NIF_TERM argv[])
 {
     ErlNifBinary input;
     ERL_NIF_TERM output;
@@ -152,10 +154,12 @@ static ERL_NIF_TERM unescape_cdata(ErlNifEnv *env, int argc, const ERL_NIF_TERM 
     unsigned char *data = enif_make_new_binary(env, rbuf->len, &output);
     memcpy(data, rbuf->b, rbuf->len);
     destroy_buf(env, rbuf);
+    consume_timeslice(env, input);
+
     return output;
 }
 
-static ERL_NIF_TERM escape_attr(ErlNifEnv *env, int argc, const ERL_NIF_TERM argv[])
+ERL_NIF_TERM exml_escape_attr(ErlNifEnv *env, int argc, const ERL_NIF_TERM argv[])
 {
     ErlNifBinary input;
     ERL_NIF_TERM output;
@@ -207,10 +211,12 @@ static ERL_NIF_TERM escape_attr(ErlNifEnv *env, int argc, const ERL_NIF_TERM arg
     unsigned char *data = enif_make_new_binary(env, rbuf->len, &output);
     memcpy(data, rbuf->b, rbuf->len);
     destroy_buf(env, rbuf);
+    consume_timeslice(env, input);
+
     return output;
 }
 
-static ERL_NIF_TERM unescape_attr(ErlNifEnv *env, int argc, const ERL_NIF_TERM argv[])
+ERL_NIF_TERM exml_unescape_attr(ErlNifEnv *env, int argc, const ERL_NIF_TERM argv[])
 {
     ErlNifBinary input;
     ERL_NIF_TERM  output;
@@ -264,6 +270,8 @@ static ERL_NIF_TERM unescape_attr(ErlNifEnv *env, int argc, const ERL_NIF_TERM a
     unsigned char* data = enif_make_new_binary(env, rbuf->len, &output);
     memcpy((char*)data, rbuf->b, rbuf->len);
     destroy_buf(env, rbuf);
+    consume_timeslice(env, input);
+
     return output;
 }
 
@@ -290,10 +298,10 @@ static void unload(ErlNifEnv* env, void* priv)
 
 static ErlNifFunc nif_funcs[] =
 {
-    {"escape_attr_nif", 1, escape_attr},
-    {"unescape_attr_nif", 1, unescape_attr},
-    {"escape_cdata_nif", 1, escape_cdata},
-    {"unescape_cdata_nif", 1, unescape_cdata}
+    {"escape_attr_nif", 1, exml_escape_attr},
+    {"unescape_attr_nif", 1, exml_unescape_attr},
+    {"escape_cdata_nif", 1, exml_escape_cdata},
+    {"unescape_cdata_nif", 1, exml_unescape_cdata}
 };
 
 ERL_NIF_INIT(exml, nif_funcs, &load, &reload, &upgrade, &unload);
