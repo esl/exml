@@ -61,6 +61,16 @@ no_element_with_ns_query_test() ->
                  exml_query:subelement_with_ns(chat_marker(),
                                                <<"wrong">>, none)).
 
+element_with_attr_query_test() ->
+    ?assertEqual(xml(<<"<received xmlns='urn:xmpp:chat-markers:0'
+                                id='0047ee62-9418-4ef8-abd8-0d08e4140b72'/>)">>),
+                 exml_query:subelement_with_attr(chat_marker(), <<"xmlns">>,
+                                                 <<"urn:xmpp:chat-markers:0">>)).
+
+no_element_with_attr_query_test() ->
+    ?assertEqual(none,
+                 exml_query:subelement_with_attr(chat_marker(),
+                                                 <<"xmlns">>, <<"wrong">>, none)).
 elements_with_ns_query_test() ->
     ValidResult = [
                    xml(<<"<received xmlns='urn:xmpp:chat-markers:0'
