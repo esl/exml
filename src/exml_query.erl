@@ -21,13 +21,16 @@
 
 -type element_with_ns() :: {element_with_ns, binary()}.
 -type element_with_name_and_ns () :: {element_with_ns, binary(), binary()}.
+-type element_with_attr_of_value () :: {element_with_attr, binary(), binary()}.
 
 -type path() :: [cdata | %% selects cdata from the element
                  {element, binary()} | % selects subelement with given name
                  {attr, binary()} | % selects attr of given name
                  element_with_ns() | % selects subelement with given namespace
-                 element_with_name_and_ns() % selects subelement with given name and namespace
+                 element_with_name_and_ns() | % selects subelement with given name and namespace
+                 element_with_attr_of_value() % selects subelement with given attritube and value
                 ].
+
 -export_type([path/0]).
 
 %% @doc gets the element/attr/cdata contained in the leftmost path
@@ -47,6 +50,9 @@ path(#xmlel{} = Element, [{element_with_ns, NS} | Rest], Default) ->
     path(Child, Rest, Default);
 path(#xmlel{} = Element, [{element_with_ns, Name, NS} | Rest], Default) ->
     Child = subelement_with_name_and_ns(Element, Name, NS),
+    path(Child, Rest, Default);
+path(#xmlel{} = Element, [{element_with_attr, Name, Value} | Rest], Default) ->
+    Child = subelement_with_attr(Element, Name, Value),
     path(Child, Rest, Default);
 path(#xmlel{} = Element, [cdata], _) ->
     cdata(Element);
