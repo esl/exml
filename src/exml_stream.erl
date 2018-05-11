@@ -17,6 +17,8 @@
          free_parser/1]).
 
 -export_type([element/0,
+              start/0,
+              stop/0,
               parser/0,
               parser_opt/0]).
 
@@ -25,6 +27,8 @@
                  buffer :: [binary()]
                 }).
 
+-type start() :: #xmlstreamstart{}.
+-type stop() :: #xmlstreamend{}.
 -type element() :: exml_nif:stream_element().
 -type parser() :: #parser{}.
 %% infinite_stream - no distinct "stream start" or "stream end", only #xmlel{} will be returned

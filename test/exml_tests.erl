@@ -11,6 +11,7 @@
 
 -include_lib("eunit/include/eunit.hrl").
 -include_lib("exml/include/exml.hrl").
+-include_lib("exml/include/exml_stream.hrl").
 
 -compile(export_all).
 
@@ -34,6 +35,12 @@ size_of_exml_with_cdata_test() ->
 throws_error_when_record_is_invalid_test() ->
     BadExml = #xmlel{name = <<"pp">>, attrs = 1},
     ?assertError({badxml, BadExml, _}, exml:to_binary(BadExml)).
+
+to_binary_arbitrary_stream_elements_test() ->
+    Elements = [#xmlcdata{content = <<"content">>},
+                #xmlstreamend{name = <<"endname">>},
+                #xmlstreamstart{name = <<"name">>, attrs = [{<<"a">>, <<"b">>}]}],
+    ?assertEqual(<<"content</endname><name a='b'>">>, exml:to_binary(Elements)).
 
 parse(Doc) ->
     case exml:parse(Doc) of

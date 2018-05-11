@@ -13,7 +13,7 @@
 
 -export([create/2, parse/1, parse_next/2, escape_cdata/1,
          to_binary/2, reset_parser/1]).
--export_type([parser/0]).
+-export_type([parser/0, stream_element/0]).
 
 -on_load(load/0).
 
