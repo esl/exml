@@ -191,7 +191,7 @@ subelements_with_name_and_ns(#xmlel{children = Children}, Name, NS) ->
 
 -spec cdata(exml:element()) -> binary().
 cdata(#xmlel{children = Children}) ->
-    list_to_binary([exml:unescape_cdata(C) || #xmlcdata{} = C <- Children]).
+    list_to_binary([C || #xmlcdata{content = C} <- Children]).
 
 -spec attr(exml:element(), binary()) -> binary() | undefined.
 attr(Element, Name) ->

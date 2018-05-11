@@ -47,12 +47,12 @@ elements_query_test() ->
 
 element_with_ns_query_test() ->
     ?assertEqual(xml(<<"<received xmlns='urn:xmpp:chat-markers:0'
-                                id='0047ee62-9418-4ef8-abd8-0d08e4140b72'/>)">>),
+                                id='0047ee62-9418-4ef8-abd8-0d08e4140b72'/>">>),
                  exml_query:subelement_with_ns(chat_marker(),
                                                <<"urn:xmpp:chat-markers:0">>)),
 
     ?assertEqual(xml(<<"<received xmlns='urn:xmpp:chat-markers:0'
-                                id='0047ee62-9418-4ef8-abd8-0d08e4140b72'/>)">>),
+                                id='0047ee62-9418-4ef8-abd8-0d08e4140b72'/>">>),
                  exml_query:path(chat_marker(),
                                  [{element_with_ns, <<"urn:xmpp:chat-markers:0">>}])).
 
@@ -79,7 +79,7 @@ no_element_with_attr_query_test() ->
 elements_with_ns_query_test() ->
     ValidResult = [
                    xml(<<"<received xmlns='urn:xmpp:chat-markers:0'
-                                id='0047ee62-9418-4ef8-abd8-0d08e4140b72'/>)">>),
+                                id='0047ee62-9418-4ef8-abd8-0d08e4140b72'/>">>),
                    xml(<<"<displayed xmlns='urn:xmpp:chat-markers:0'
                                 id='0e300615-7a77-4b5e-91c5-52d8c44149cf'/>">>)
                   ],
@@ -110,7 +110,7 @@ no_element_with_name_and_ns_query_test() ->
 elements_with_name_and_ns_query_test() ->
     ValidResult = [
                    xml(<<"<item xmlns='urn:xmpp:chat-markers:0'
-                                id='0047ee62-9418-4ef8-abd8-0d08e4140b72'/>)">>),
+                                id='0047ee62-9418-4ef8-abd8-0d08e4140b72'/>">>),
                    xml(<<"<item xmlns='urn:xmpp:chat-markers:0'
                                 id='0e300615-7a77-4b5e-91c5-52d8c44149cf'/>">>)
                   ],

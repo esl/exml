@@ -1,8 +1,24 @@
-# [Unreleased]
+# [3.0.0] 2018-05-04
+
+## Changed
+
+* Replaced expat with RapidXML
+
+# [2.5.0] 2018-05-04
 
 ## Added
 
-- Ability to automatically restart XMPP TCP streams for pipelining
+* A new API to query elements with specific namespaces. Path querying is extended with new selectors as well.
+* Child element size (in bytes) limit may be configured.
+* Stream opening tag is now configurable.
+
+## Changed
+
+* Testable with `rebar3`; cover is now enabled.
+
+## Misc
+
+* C sources reformatting.
 
 # [2.4.1] 2016-12-17
 

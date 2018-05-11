@@ -5,17 +5,6 @@
 
 -compile(export_all).
 
-
-parser_error_bad_stream_opt_test() ->
-    ?assertEqual({error, {error, {invalid_parser_opt,
-                                  {infinite_stream, infinity}}}},
-                 exml_stream:new_parser([{infinite_stream, infinity}])).
-
-parser_error_bad_autoreset_opt_test() ->
-    ?assertEqual({error, {error, {invalid_parser_opt,
-                                  {autoreset, kielbasa}}}},
-                 exml_stream:new_parser([{autoreset, kielbasa}])).
-
 basic_parse_test() ->
     {ok, Parser0} = exml_stream:new_parser(),
     {ok, Parser1, Empty0} =
@@ -38,7 +27,7 @@ basic_parse_test() ->
     ?assertEqual([], Empty1),
     {ok, Parser5, Empty2} = exml_stream:parse(Parser4, <<"/><session xmlns='some_other'/>This is ">>),
     ?assertEqual([], Empty2),
-    {ok, Parser6, Features} = exml_stream:parse(Parser5, <<"some CData</stream:features>">>),
+    {ok, _Parser6, Features} = exml_stream:parse(Parser5, <<"some CData</stream:features>">>),
     ?assertMatch(
        [#xmlel{name = <<"stream:features">>,
                     children = [#xmlel{name = <<"bind">>,
@@ -48,15 +37,14 @@ basic_parse_test() ->
                                 _CData]}],
        Features),
     [#xmlel{children=[_, _, CData]}] = Features,
-    ?assertEqual(<<"This is some CData">>, exml:unescape_cdata(CData)),
-    ?assertEqual(ok, exml_stream:free_parser(Parser6)).
+    ?assertEqual(#xmlcdata{content = <<"This is some CData">>}, CData).
 
 parser_errors_test() ->
     ?assertMatch({error, _}, exml:parse(<<"<notclosed_element>">>)),
     %% it is the special case, because we are wrapping binary in the following way
     %% Stream = <<"<stream>", XML/binary, "</stream>">>,
     %% to make it a non-blocking call(?)
-    ?assertMatch({error, {bad_parse, _}}, exml:parse(<<"<stream>">>)).
+    ?assertMatch({error, _}, exml:parse(<<"<stream>">>)).
 
 -define(BANANA_STREAM, <<"<stream:stream xmlns:stream='something'><foo attr='bar'>I am a banana!<baz/></foo></stream:stream>">>).
 -define(assertIsBanana(Elements), (fun() -> % fun instead of begin/end because we bind CData in unhygenic macro
@@ -68,31 +56,29 @@ parser_errors_test() ->
                                                          #xmlstreamend{name = <<"stream:stream">>}],
                                                         Elements),
                                            [_, #xmlel{children=[CData|_]}|_] = Elements,
-                                           ?assertEqual(<<"I am a banana!">>, exml:unescape_cdata(CData)),
+                                           ?assertEqual(#xmlcdata{content = <<"I am a banana!">>}, CData),
                                            Elements
                                    end)()).
 
 conv_test() ->
     AssertParses = fun(Input) ->
                            {ok, Parser0} = exml_stream:new_parser(),
-                           {ok, Parser1, Elements} = exml_stream:parse(Parser0, Input),
-                           ok = exml_stream:free_parser(Parser1),
+                           {ok, _Parser1, Elements} = exml_stream:parse(Parser0, Input),
                            ?assertIsBanana(Elements)
                    end,
     Elements = AssertParses(?BANANA_STREAM),
     AssertParses(exml:to_binary(Elements)),
     AssertParses(list_to_binary(exml:to_list(Elements))),
-    AssertParses(list_to_binary(exml:to_iolist(Elements))),
-    AssertParses(list_to_binary(re:replace(exml:to_pretty_iolist(Elements), "\n\s*", "", [global]))).
+    AssertParses(exml:to_iolist(Elements)),
+    AssertParses(iolist_to_binary(re:replace(exml:to_pretty_iolist(Elements), "\n\\s*", "", [global]))).
 
 stream_reopen_test() ->
     {ok, Parser0} = exml_stream:new_parser(),
     {ok, Parser1, Elements1} = exml_stream:parse(Parser0, ?BANANA_STREAM),
     ?assertIsBanana(Elements1),
     {ok, Parser2} = exml_stream:reset_parser(Parser1),
-    {ok, Parser3, Elements2} = exml_stream:parse(Parser2, ?BANANA_STREAM),
-    ?assertIsBanana(Elements2),
-    ok = exml_stream:free_parser(Parser3).
+    {ok, _Parser3, Elements2} = exml_stream:parse(Parser2, ?BANANA_STREAM),
+    ?assertIsBanana(Elements2).
 
 infinit_framed_stream_test() ->
     {ok, Parser0} = exml_stream:new_parser([{infinite_stream, true},
@@ -117,44 +103,36 @@ infinit_framed_stream_test() ->
 parse_error_test() ->
     {ok, Parser0} = exml_stream:new_parser(),
     Input = <<"top-level non-tag">>,
-    ?assertEqual({error, "syntax error"}, exml_stream:parse(Parser0, Input)),
-    ok = exml_stream:free_parser(Parser0).
+    ?assertMatch({error, _}, exml_stream:parse(Parser0, Input)).
 
 assert_parses_escape_cdata(Text) ->
-    Escaped = exml:escape_cdata(Text),
-    Tag = #xmlel{name = <<"tag">>, children=[Escaped]},
+    Tag = #xmlel{name = <<"tag">>, children=[#xmlcdata{content = Text}]},
     Stream = [#xmlstreamstart{name = <<"s">>}, Tag, #xmlstreamend{name = <<"s">>}],
     {ok, Parser0} = exml_stream:new_parser(),
-    {ok, Parser1, Elements} = exml_stream:parse(Parser0, exml:to_binary(Stream)),
+    {ok, _Parser1, Elements} = exml_stream:parse(Parser0, exml:to_binary(Stream)),
     ?assertMatch([#xmlstreamstart{name = <<"s">>},
                   #xmlel{name = <<"tag">>, children=[_CData]},
                   #xmlstreamend{name = <<"s">>}],
                  Elements),
     [_, #xmlel{children=[CData]}, _] = Elements,
-    ?assertEqual(Text, exml:unescape_cdata(CData)),
-    ok = exml_stream:free_parser(Parser1).
+    ?assertEqual(#xmlcdata{content = Text}, CData).
 
 reset_parser_error_test() ->
     {ok, _P} = exml_stream:new_parser(),
     BadParser = {parser, foo, bar, baz},
-    ?assertEqual({error, {error, badarg}},
-                 exml_stream:reset_parser(BadParser)).
+    ?assertError(function_clause, exml_stream:reset_parser(BadParser)).
 
-cdata_is_ignored_when_first_child_of_stream_test() ->
+cdata_is_an_error_when_first_child_of_stream_test() ->
     {ok, P} = exml_stream:new_parser(),
-    {ok, _, Elements} = exml_stream:parse(P, <<"<stream>hello</stream>">>),
-    ?assertMatch([#xmlstreamstart{name = <<"stream">>},
-                  #xmlstreamend{name = <<"stream">>}],
-                 Elements).
+    ?assertMatch({error, _}, exml_stream:parse(P, <<"<stream>hello</stream>">>)).
 
 multiple_cdata_are_joined_test() ->
-    {ok, P} = exml_stream:new_parser([{infinite_stream, false},
-                                      {autoreset, true}]),
+    {ok, P} = exml_stream:new_parser(),
     {ok, P1, _} = exml_stream:parse(P, <<"<s><a><![CDATA[hello]]>">>),
     {ok, P2, E1} = exml_stream:parse(P1, <<", world</a>">>),
     {ok, _,  _} = exml_stream:parse(P2, <<"</s>">>),
     #xmlel{children=[CData]} = hd(E1),
-    ?assertEqual(<<"hello, world">>, exml:unescape_cdata(CData)).
+    ?assertEqual(#xmlcdata{content = <<"hello, world">>}, CData).
 
 cdata_test() ->
     assert_parses_escape_cdata(<<"I am a banana!">>),
@@ -168,8 +146,7 @@ cdata_test() ->
 conv_attr_test() ->
     AssertParses = fun(Input) ->
                            {ok, Parser0} = exml_stream:new_parser(),
-                           {ok, Parser1, Elements} = exml_stream:parse(Parser0, Input),
-                           ok = exml_stream:free_parser(Parser1),
+                           {ok, _Parser1, Elements} = exml_stream:parse(Parser0, Input),
                            ?assertMatch([_, #xmlel{attrs = [{<<"attr">>, <<"&<>\"'\n\t\r">>}]} | _],
                                                    Elements),
                            Elements
@@ -177,8 +154,8 @@ conv_attr_test() ->
     Elements = AssertParses(?ATTR_TEST_STREAM),
     AssertParses(exml:to_binary(Elements)),
     AssertParses(list_to_binary(exml:to_list(Elements))),
-    AssertParses(list_to_binary(exml:to_iolist(Elements))),
-    AssertParses(list_to_binary(re:replace(exml:to_pretty_iolist(Elements), "\n\s*", "", [global]))).
+    AssertParses(iolist_to_binary(exml:to_iolist(Elements))),
+    AssertParses(iolist_to_binary(re:replace(exml:to_pretty_iolist(Elements), "\n\s+", "", [global]))).
 
 -define(RESTART_TEST_STREAM, <<"<stream:stream xmlns:stream='something'><quote/><stream:stream xmlns:stream='else'><other/><things/>">>).
 
@@ -192,16 +169,6 @@ stream_restarts_test() ->
          #xmlel{name = <<"other">>},
          #xmlel{name = <<"things">>}],
         Elements).
-
-stream_bad_start_tag_test() ->
-    {ok, Parser0} = exml_stream:new_parser([{start_tag, <<"stream:stream">>}]),
-    ?assertEqual({error, "invalid start tag <badstart>"},
-                 exml_stream:parse(Parser0, <<"<badstart><a/>">>)).
-
-error_on_unclosed_tags_when_stream_restarts_test() ->
-    {ok, Parser0} = exml_stream:new_parser([{start_tag, <<"start">>}]),
-    ?assertEqual({error, "unclosed tag on stream restart: <a>"},
-                 exml_stream:parse(Parser0, <<"<start><a><start>">>)).
 
 -define(RESTART_TEST_STREAM_XMLDEC, <<"<stream:stream xmlns:stream='something'><quote/>"
                                       "<?xml version='1.0'?><stream:stream xmlns:stream='a'><other/>">>).
@@ -217,7 +184,7 @@ stream_restarts_with_xml_declaration_test() ->
         Elements).
 
 stream_max_child_size_test() ->
-    {ok, Parser0} = exml_stream:new_parser([{max_child_size, 5}]),
-    {ok, Parser1, _} = exml_stream:parse(Parser0, <<"<root><a></a>">>),
-    {ok, Parser2, _} = exml_stream:parse(Parser1, <<"<b>45</b>">>),
+    {ok, Parser0} = exml_stream:new_parser([{max_child_size, 15}]),
+    {ok, Parser1, _} = exml_stream:parse(Parser0, <<"<stream><root>">>),
+    {ok, Parser2, _} = exml_stream:parse(Parser1, <<"<a></a>">>),
     ?assertEqual({error, "child element too big"}, exml_stream:parse(Parser2, <<"<b>456</b>">>)).

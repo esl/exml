@@ -1,7 +1,0 @@
-BasedOnStyle: mozilla
-IndentWidth: 4
-BreakBeforeBraces: GNU
-ColumnLimit: 100
-PointerAlignment: Right
-AlwaysBreakAfterReturnType: None
-AlwaysBreakAfterDefinitionReturnType: None
