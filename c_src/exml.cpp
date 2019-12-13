@@ -150,7 +150,7 @@ namespace {
 ErlNifResourceType *parser_type;
 
 constexpr int default_parse_flags() {
-  return rapidxml::parse_no_string_terminators;
+  return rapidxml::parse_no_string_terminators | rapidxml::parse_validate_closing_tags;
 }
 
 constexpr int parse_one() {
