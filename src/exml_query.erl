@@ -28,13 +28,16 @@
                  {attr, binary()} |
                  element_with_ns() |
                  element_with_name_and_ns() |
-                 element_with_attr_of_value()]. %% selects cdata from the element
+                 element_with_attr_of_value()].
+
+                                                %% selects cdata from the element
                                                 % selects subelement with given name
 
                                     % selects attr of given name
  % selects subelement with given namespace
 
                                               % selects subelement with given name and namespace
+
  % selects subelement with given attribute and value
 
 -export_type([path/0]).
@@ -49,7 +52,8 @@ path(Element, Path) ->
 path(#xmlel{} = Element, [], _) ->
     Element;
 path(#xmlel{} = Element, [{element, Name} | Rest], Default) ->
-    Child = subelement(Element, Name), % may return undefined
+    Child = subelement(Element,
+                       Name), % may return undefined
     path(Child, Rest, Default);
 path(#xmlel{} = Element, [{element_with_ns, NS} | Rest], Default) ->
     Child = subelement_with_ns(Element, NS),
@@ -97,10 +101,10 @@ subelement(Element, Name) ->
 -spec subelement(exml:element(), binary(), Other) -> exml:element() | Other.
 subelement(#xmlel{children = Children}, Name, Default) ->
     case lists:keyfind(Name, #xmlel.name, Children) of
-      false ->
-          Default;
-      Result ->
-          Result
+        false ->
+            Default;
+        Result ->
+            Result
     end.
 
 -spec subelement_with_ns(exml:element(), binary()) -> exml:element() | undefined.
@@ -115,10 +119,10 @@ child_with_ns([], _, Default) ->
     Default;
 child_with_ns([#xmlel{} = Element | Rest], NS, Default) ->
     case attr(Element, <<"xmlns">>) of
-      NS ->
-          Element;
-      _ ->
-          child_with_ns(Rest, NS, Default)
+        NS ->
+            Element;
+        _ ->
+            child_with_ns(Rest, NS, Default)
     end;
 child_with_ns([_ | Rest], NS, Default) ->
     child_with_ns(Rest, NS, Default).
@@ -144,10 +148,10 @@ child_with_attr([], _, _, Default) ->
     Default;
 child_with_attr([#xmlel{} = Element | Rest], AttrName, AttrVal, Default) ->
     case attr(Element, AttrName) of
-      AttrVal ->
-          Element;
-      _ ->
-          child_with_attr(Rest, AttrName, AttrVal, Default)
+        AttrVal ->
+            Element;
+        _ ->
+            child_with_attr(Rest, AttrName, AttrVal, Default)
     end;
 child_with_attr([_ | Rest], AttrName, AttrVal, Default) ->
     child_with_attr(Rest, AttrName, AttrVal, Default).
@@ -163,18 +167,18 @@ subelement_with_name_and_ns(Element, Name, NS) ->
                                   Other) -> exml:element() | Other.
 subelement_with_name_and_ns(Element, Name, NS, Default) ->
     case subelement(Element, Name, undefined) of
-      undefined ->
-          Default;
-      SubElement ->
-          subelement_or_default(SubElement, NS, Default)
+        undefined ->
+            Default;
+        SubElement ->
+            subelement_or_default(SubElement, NS, Default)
     end.
 
 subelement_or_default(SubElement, NS, Default) ->
     case attr(SubElement, <<"xmlns">>) of
-      NS ->
-          SubElement;
-      _ ->
-          Default
+        NS ->
+            SubElement;
+        _ ->
+            Default
     end.
 
 -spec subelements(exml:element(), binary()) -> [exml:element()].
@@ -226,9 +230,9 @@ attr(Element, Name) ->
 -spec attr(exml:element(), binary(), Other) -> binary() | Other.
 attr(#xmlel{attrs = Attrs}, Name, Default) ->
     case lists:keyfind(Name, 1, Attrs) of
-      {Name, Value} ->
-          Value;
-      false ->
-          Default
+        {Name, Value} ->
+            Value;
+        false ->
+            Default
     end.
 

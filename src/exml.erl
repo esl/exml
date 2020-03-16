@@ -38,8 +38,8 @@ xml_size(#xmlcdata{content = Content}) ->
     iolist_size(exml_nif:escape_cdata(Content));
 xml_size(#xmlel{name = Name, attrs = Attrs, children = []}) ->
     3 % Self-closing: </>
-      + byte_size(Name)
-      + xml_size(Attrs);
+        + byte_size(Name)
+        + xml_size(Attrs);
 xml_size(#xmlel{name = Name, attrs = Attrs, children = Children}) ->
     % Opening and closing: <></>
     5 + byte_size(Name) * 2 + xml_size(Attrs) + xml_size(Children);
@@ -49,8 +49,8 @@ xml_size(#xmlstreamend{name = Name}) ->
     byte_size(Name) + 3;
 xml_size({Key, Value}) ->
     byte_size(Key) +
-      4 % ="" and whitespace before
-      + byte_size(Value).
+        4 % ="" and whitespace before
+        + byte_size(Value).
 
 %% @doc Sort a (list of) `xmlel()`.
 %%
@@ -104,11 +104,11 @@ to_iolist([_ | _] = Elements, Pretty) ->
     Head = hd(Elements),
     [Last | RevChildren] = lists:reverse(tl(Elements)),
     case {Head, Last} of
-      {#xmlstreamstart{name = Name, attrs = Attrs}, #xmlstreamend{name = Name}} ->
-          Element = #xmlel{name = Name, attrs = Attrs, children = lists:reverse(RevChildren)},
-          to_binary_nif(Element, Pretty);
-      _ ->
-          [to_iolist(El, Pretty) || El <- Elements]
+        {#xmlstreamstart{name = Name, attrs = Attrs}, #xmlstreamend{name = Name}} ->
+            Element = #xmlel{name = Name, attrs = Attrs, children = lists:reverse(RevChildren)},
+            to_binary_nif(Element, Pretty);
+        _ ->
+            [to_iolist(El, Pretty) || El <- Elements]
     end;
 to_iolist(#xmlstreamstart{name = Name, attrs = Attrs}, _Pretty) ->
     Result = to_binary_nif(#xmlel{name = Name, attrs = Attrs}, not_pretty),
@@ -123,9 +123,9 @@ to_iolist(#xmlcdata{content = Content}, _Pretty) ->
 -spec to_binary_nif(element(), pretty | term()) -> binary().
 to_binary_nif(#xmlel{} = Element, Pretty) ->
     case catch exml_nif:to_binary(Element, Pretty) of
-      {'EXIT', Reason} ->
-          erlang:error({badxml, Element, Reason});
-      Result when is_binary(Result) ->
-          Result
+        {'EXIT', Reason} ->
+            erlang:error({badxml, Element, Reason});
+        Result when is_binary(Result) ->
+            Result
     end.
 
