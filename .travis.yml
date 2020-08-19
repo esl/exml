@@ -1,23 +1,29 @@
 language: erlang
+
 branches:
-        only:
-                - master
+    only:
+        - master
+
 notifications:
-        email: mongoose-im@erlang-solutions.com
+    email: mongoose-im@erlang-solutions.com
+
 otp_release:
-        - 19.3
-        - 20.3
-        - 21.0
-        - 22.0
+    - 19.3
+    - 20.3
+    - 21.3
+    - 22.3
+    - 23.0
+
 install:
-        - make
-        - make test-compile
-        - travis_retry pip install --user codecov
+    - make
+    - make test-compile
+    - travis_retry pip install --user codecov
+
 script:
-        - make test
-        - make dialyzer
+    - make test
+    - make dialyzer
 
 after_success:
-        - make coverage-report
-        - make codecov
-        - codecov
+    - make coverage-report
+    - make codecov
+    - codecov
