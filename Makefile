@@ -27,7 +27,7 @@ codecov: _build/test/cover/eunit.coverdata
 	./rebar3 as test codecov analyze
 
 rebar3:
-	wget https://github.com/erlang/rebar3/releases/download/3.6.1/rebar3 &&\
+	wget https://github.com/erlang/rebar3/releases/download/3.13.2/rebar3 &&\
 	chmod u+x rebar3
 
 dialyzer: rebar3
