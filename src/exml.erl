@@ -14,20 +14,15 @@
 -include("exml_stream.hrl").
 
 -export([parse/1]).
-
 -export([to_list/1,
          to_binary/1,
          to_iolist/1,
          xml_size/1,
          xml_sort/1,
          to_pretty_iolist/1]).
-
 -export([]).
 
--export_type([attr/0,
-              cdata/0,
-              element/0,
-              item/0]).
+-export_type([attr/0, cdata/0, element/0, item/0]).
 
 -type attr() :: {binary(), binary()}.
 -type cdata() :: #xmlcdata{}.
@@ -39,23 +34,23 @@ xml_size([]) ->
     0;
 xml_size([Elem | Rest]) ->
     xml_size(Elem) + xml_size(Rest);
-xml_size(#xmlcdata{ content = Content }) ->
+xml_size(#xmlcdata{content = Content}) ->
     iolist_size(exml_nif:escape_cdata(Content));
-xml_size(#xmlel{ name = Name, attrs = Attrs, children = [] }) ->
+xml_size(#xmlel{name = Name, attrs = Attrs, children = []}) ->
     3 % Self-closing: </>
-    + byte_size(Name) + xml_size(Attrs);
-xml_size(#xmlel{ name = Name, attrs = Attrs, children = Children }) ->
+        + byte_size(Name)
+        + xml_size(Attrs);
+xml_size(#xmlel{name = Name, attrs = Attrs, children = Children}) ->
     % Opening and closing: <></>
-    5 + byte_size(Name)*2
-    + xml_size(Attrs) + xml_size(Children);
-xml_size(#xmlstreamstart{ name = Name, attrs = Attrs }) ->
+    5 + byte_size(Name) * 2 + xml_size(Attrs) + xml_size(Children);
+xml_size(#xmlstreamstart{name = Name, attrs = Attrs}) ->
     byte_size(Name) + 2 + xml_size(Attrs);
-xml_size(#xmlstreamend{ name = Name }) ->
+xml_size(#xmlstreamend{name = Name}) ->
     byte_size(Name) + 3;
 xml_size({Key, Value}) ->
-    byte_size(Key)
-    + 4 % ="" and whitespace before
-    + byte_size(Value).
+    byte_size(Key) +
+        4 % ="" and whitespace before
+        + byte_size(Value).
 
 %% @doc Sort a (list of) `xmlel()`.
 %%
@@ -71,17 +66,14 @@ xml_size({Key, Value}) ->
 xml_sort(#xmlcdata{} = Cdata) ->
     Cdata;
 xml_sort(#xmlel{} = El) ->
-    #xmlel{ attrs = Attrs, children = Children } = El,
-    El#xmlel{
-      attrs = lists:sort(Attrs),
-      children = [ xml_sort(C) || C <- Children ]
-     };
-xml_sort(#xmlstreamstart{ attrs = Attrs } = StreamStart) ->
-    StreamStart#xmlstreamstart{ attrs = lists:sort(Attrs) };
+    #xmlel{attrs = Attrs, children = Children} = El,
+    El#xmlel{attrs = lists:sort(Attrs), children = [xml_sort(C) || C <- Children]};
+xml_sort(#xmlstreamstart{attrs = Attrs} = StreamStart) ->
+    StreamStart#xmlstreamstart{attrs = lists:sort(Attrs)};
 xml_sort(#xmlstreamend{} = StreamEnd) ->
     StreamEnd;
 xml_sort(Elements) when is_list(Elements) ->
-    lists:sort([ xml_sort(E) || E <- Elements ]).
+    lists:sort([xml_sort(E) || E <- Elements]).
 
 -spec to_list(element() | [exml_stream:element()]) -> string().
 to_list(Element) ->
@@ -112,10 +104,8 @@ to_iolist([_ | _] = Elements, Pretty) ->
     Head = hd(Elements),
     [Last | RevChildren] = lists:reverse(tl(Elements)),
     case {Head, Last} of
-        {#xmlstreamstart{name = Name, attrs = Attrs},
-         #xmlstreamend{name = Name}} ->
-            Element = #xmlel{name = Name, attrs = Attrs,
-                             children = lists:reverse(RevChildren)},
+        {#xmlstreamstart{name = Name, attrs = Attrs}, #xmlstreamend{name = Name}} ->
+            Element = #xmlel{name = Name, attrs = Attrs, children = lists:reverse(RevChildren)},
             to_binary_nif(Element, Pretty);
         _ ->
             [to_iolist(El, Pretty) || El <- Elements]
@@ -133,6 +123,9 @@ to_iolist(#xmlcdata{content = Content}, _Pretty) ->
 -spec to_binary_nif(element(), pretty | term()) -> binary().
 to_binary_nif(#xmlel{} = Element, Pretty) ->
     case catch exml_nif:to_binary(Element, Pretty) of
-        {'EXIT', Reason} -> erlang:error({badxml, Element, Reason});
-        Result when is_binary(Result) -> Result
+        {'EXIT', Reason} ->
+            erlang:error({badxml, Element, Reason});
+        Result when is_binary(Result) ->
+            Result
     end.
+
