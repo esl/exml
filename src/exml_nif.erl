@@ -21,6 +21,7 @@
 %%% Public API
 %%%===================================================================
 
+-dialyzer({nowarn_function, [load/0]}).
 -spec load() -> any().
 load() ->
     PrivDir = case code:priv_dir(?MODULE) of
