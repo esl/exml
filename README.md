@@ -3,6 +3,10 @@ exml
 
 [![GitHub Actions](https://github.com/esl/exml/workflows/ci/badge.svg?branch=master)](https://github.com/esl/exml/actions?query=workflow%3Aci+branch%3Amaster)
 [![Codecov](https://codecov.io/gh/esl/exml/branch/master/graph/badge.svg)](https://codecov.io/gh/esl/exml)
+[![Hex pm](http://img.shields.io/hexpm/v/hexml.svg?style=flat)](https://hex.pm/packages/hexml)
+[![Hex Docs](https://img.shields.io/badge/hex-docs-lightgreen.svg)](https://hexdocs.pm/hexml/)
+[![Downloads](https://img.shields.io/hexpm/dt/hexml.svg)](https://hex.pm/packages/hexml)
+[![License](https://img.shields.io/hexpm/l/hexml.svg)](https://github.com/esl/hexml/blob/master/LICENSE)
 
 **exml** is an Erlang library for parsing XML streams and doing complex XML structures manipulation.
 
