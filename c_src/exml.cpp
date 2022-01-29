@@ -59,51 +59,22 @@ private:
 };
 
 namespace {
-ErlNifEnv *global_env;
-ERL_NIF_TERM atom_ok;
-ERL_NIF_TERM atom_error;
-ERL_NIF_TERM atom_undefined;
-ERL_NIF_TERM atom_xmlel;
-ERL_NIF_TERM atom_xmlcdata;
-ERL_NIF_TERM atom_xmlstreamstart;
-ERL_NIF_TERM atom_xmlstreamend;
-ERL_NIF_TERM atom_pretty;
-ERL_NIF_TERM atom_true;
-constexpr const unsigned char EMPTY[1] = {0};
+  ERL_NIF_TERM atom_ok;
+  ERL_NIF_TERM atom_error;
+  ERL_NIF_TERM atom_undefined;
+  ERL_NIF_TERM atom_xmlel;
+  ERL_NIF_TERM atom_xmlcdata;
+  ERL_NIF_TERM atom_xmlstreamstart;
+  ERL_NIF_TERM atom_xmlstreamend;
+  ERL_NIF_TERM atom_pretty;
+  ERL_NIF_TERM atom_true;
+  constexpr const unsigned char EMPTY[1] = {0};
 
-class Version {
-public:
-  Version(const std::string str) {
-    for (std::size_t i = 0; i < str.size();) {
-      auto dot_idx = std::min(str.find(".", i), str.size());
-      std::string version_part(str.cbegin() + i, str.cbegin() + dot_idx);
-      v.push_back(std::stoi(version_part));
-      i = dot_idx + 1;
-    }
+  xml_document &get_static_doc() {
+    static thread_local xml_document doc;
+    doc.clear();
+    return doc;
   }
-
-  bool operator<(const Version &other) {
-    return std::lexicographical_compare(v.cbegin(), v.cend(), other.v.cbegin(),
-                                        other.v.cend());
-  }
-
-private:
-  std::vector<int> v;
-};
-
-// Before ERTS 9.0, enif_inspect_binary could overwrite data given by a previous
-// enif_inspect_binary
-bool needs_inspect_workaround = false;
-inline void apply_inspect_workaround(ErlNifBinary &bin, xml_document &doc) {
-  if (needs_inspect_workaround && bin.size != 0)
-    bin.data = doc.impl.allocate_string(bin.data, bin.size);
-}
-
-xml_document &get_static_doc() {
-  static thread_local xml_document doc;
-  doc.impl.clear();
-  return doc;
-}
 
 } // namespace
 
@@ -330,8 +301,6 @@ bool build_cdata(ErlNifEnv *env, xml_document &doc, const ERL_NIF_TERM elem[],
   if (!enif_inspect_iolist_as_binary(env, elem[1], &bin))
     return false;
 
-  apply_inspect_workaround(bin, doc);
-
   auto child = doc.impl.allocate_node(rapidxml::node_data);
   child->value(bin.size > 0 ? bin.data : EMPTY, bin.size);
   node.append_node(child);
@@ -354,12 +323,8 @@ bool build_attrs(ErlNifEnv *env, xml_document &doc, ERL_NIF_TERM attrs,
     if (!enif_inspect_iolist_as_binary(env, tuple[0], &key))
       return false;
 
-    apply_inspect_workaround(key, doc);
-
     if (!enif_inspect_iolist_as_binary(env, tuple[1], &value))
       return false;
-
-    apply_inspect_workaround(value, doc);
 
     auto attr = doc.impl.allocate_attribute(key.size > 0 ? key.data : EMPTY,
                                             value.size > 0 ? value.data : EMPTY,
@@ -375,8 +340,6 @@ bool build_el(ErlNifEnv *env, xml_document &doc, const ERL_NIF_TERM elem[],
   ErlNifBinary name;
   if (!enif_inspect_iolist_as_binary(env, elem[1], &name))
     return false;
-
-  apply_inspect_workaround(name, doc);
 
   auto child = doc.impl.allocate_node(rapidxml::node_element);
   child->name(name.size > 0 ? name.data : EMPTY, name.size);
@@ -472,11 +435,6 @@ static void delete_parser(ErlNifEnv *env, void *parser) {
 }
 
 static int load(ErlNifEnv *env, void **priv_data, ERL_NIF_TERM load_info) {
-  ErlNifSysInfo sys_info;
-  enif_system_info(&sys_info, sizeof(ErlNifSysInfo));
-  if (Version{sys_info.erts_version} < Version{"9.0"})
-    needs_inspect_workaround = true;
-
   parser_type = enif_open_resource_type(
       env, "exml_nif", "parser", &delete_parser, ERL_NIF_RT_CREATE, nullptr);
   global_env = enif_alloc_env();
