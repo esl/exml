@@ -23,12 +23,16 @@
 -export_type([attr/0,
               cdata/0,
               element/0,
-              item/0]).
+              item/0,
+              prettify/0,
+              cdata_escape/0]).
 
 -type attr() :: {binary(), binary()}.
 -type cdata() :: #xmlcdata{}.
 -type element() :: #xmlel{}.
 -type item() :: element() | attr() | cdata() | exml_stream:start() | exml_stream:stop().
+-type prettify() :: pretty | not_pretty.
+-type cdata_escape() :: node_data | node_cdata.
 
 -spec xml_size(item() | [item()]) -> non_neg_integer().
 xml_size([]) ->
@@ -36,7 +40,7 @@ xml_size([]) ->
 xml_size([Elem | Rest]) ->
     xml_size(Elem) + xml_size(Rest);
 xml_size(#xmlcdata{ content = Content }) ->
-    iolist_size(exml_nif:escape_cdata(Content));
+    iolist_size(exml_nif:escape_cdata(Content, node_data));
 xml_size(#xmlel{ name = Name, attrs = Attrs, children = [] }) ->
     3 % Self-closing: </>
     + byte_size(Name) + xml_size(Attrs);
@@ -84,49 +88,49 @@ to_list(Element) ->
 
 -spec to_binary(element() | [exml_stream:element()]) -> binary().
 to_binary(Element) ->
-    iolist_to_binary(to_iolist(Element, not_pretty)).
+    iolist_to_binary(to_iolist(Element, not_pretty, node_data)).
 
 -spec to_iolist(element() | [exml_stream:element()]) -> binary().
 to_iolist(Element) ->
-    iolist_to_binary(to_iolist(Element, not_pretty)).
+    iolist_to_binary(to_iolist(Element, not_pretty, node_data)).
 
 -spec to_pretty_iolist(element() | [exml_stream:element()]) -> binary().
 to_pretty_iolist(Element) ->
-    iolist_to_binary(to_iolist(Element, pretty)).
+    iolist_to_binary(to_iolist(Element, pretty, node_data)).
 
 -spec parse(binary() | [binary()]) -> {ok, exml:element()} | {error, any()}.
 parse(XML) ->
     exml_nif:parse(XML).
 
--spec to_iolist(element() | [exml_stream:element()], pretty | term()) -> iolist().
-to_iolist(#xmlel{} = Element, Pretty) ->
-    to_binary_nif(Element, Pretty);
-to_iolist([Element], Pretty) ->
-    to_iolist(Element, Pretty);
-to_iolist([Head | _] = Elements, Pretty) ->
+-spec to_iolist(element() | [exml_stream:element()], prettify(), cdata_escape()) -> iolist().
+to_iolist(#xmlel{} = Element, Pretty, CDataEscape) ->
+    to_binary_nif(Element, Pretty, CDataEscape);
+to_iolist([Element], Pretty, CDataEscape) ->
+    to_iolist(Element, Pretty, CDataEscape);
+to_iolist([Head | _] = Elements, Pretty, CDataEscape) ->
     [Last | RevChildren] = lists:reverse(tl(Elements)),
     case {Head, Last} of
         {#xmlstreamstart{name = Name, attrs = Attrs},
          #xmlstreamend{name = Name}} ->
             Element = #xmlel{name = Name, attrs = Attrs,
                              children = lists:reverse(RevChildren)},
-            to_binary_nif(Element, Pretty);
+            to_binary_nif(Element, Pretty, CDataEscape);
         _ ->
-            [to_iolist(El, Pretty) || El <- Elements]
+            [to_iolist(El, Pretty, CDataEscape) || El <- Elements]
     end;
-to_iolist(#xmlstreamstart{name = Name, attrs = Attrs}, _Pretty) ->
-    Result = to_binary_nif(#xmlel{name = Name, attrs = Attrs}, not_pretty),
+to_iolist(#xmlstreamstart{name = Name, attrs = Attrs}, _Pretty, CDataEscape) ->
+    Result = to_binary_nif(#xmlel{name = Name, attrs = Attrs}, not_pretty, CDataEscape),
     FrontSize = byte_size(Result) - 2,
     <<Front:FrontSize/binary, "/>">> = Result,
     [Front, $>];
-to_iolist(#xmlstreamend{name = Name}, _Pretty) ->
+to_iolist(#xmlstreamend{name = Name}, _Pretty, _CDataEscape) ->
     [<<"</">>, Name, <<">">>];
-to_iolist(#xmlcdata{content = Content}, _Pretty) ->
-    exml_nif:escape_cdata(Content).
+to_iolist(#xmlcdata{content = Content}, _Pretty, CDataEscape) ->
+    exml_nif:escape_cdata(Content, CDataEscape).
 
--spec to_binary_nif(element(), pretty | term()) -> binary().
-to_binary_nif(#xmlel{} = Element, Pretty) ->
-    case catch exml_nif:to_binary(Element, Pretty) of
+-spec to_binary_nif(element(), prettify(), cdata_escape()) -> binary().
+to_binary_nif(#xmlel{} = Element, Pretty, CDataEscape) ->
+    case catch exml_nif:to_binary(Element, Pretty, CDataEscape) of
         {'EXIT', Reason} -> erlang:error({badxml, Element, Reason});
         Result when is_binary(Result) -> Result
     end.

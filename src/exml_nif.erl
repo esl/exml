@@ -5,14 +5,11 @@
 
 -module(exml_nif).
 
--include("exml.hrl").
--include("exml_stream.hrl").
-
 -type parser() :: term().
 -type stream_element() :: exml:element() | exml_stream:start() | exml_stream:stop().
 
--export([create/2, parse/1, parse_next/2, escape_cdata/1,
-         to_binary/2, reset_parser/1]).
+-export([create/2, parse/1, parse_next/2, escape_cdata/2,
+         to_binary/3, reset_parser/1]).
 -export_type([parser/0, stream_element/0]).
 
 -on_load(load/0).
@@ -39,12 +36,12 @@ load() ->
 create(_, _) ->
     erlang:nif_error(not_loaded).
 
--spec escape_cdata(Bin :: iodata()) -> binary().
-escape_cdata(_Bin) ->
+-spec escape_cdata(Bin :: iodata(), exml:cdata_escape()) -> binary().
+escape_cdata(_Bin, _Opt) ->
      erlang:nif_error(not_loaded).
 
--spec to_binary(Elem :: exml:element(), pretty | not_pretty) -> binary().
-to_binary(_Elem, _Pretty) ->
+-spec to_binary(Elem :: exml:element(), exml:prettify(), exml:cdata_escape()) -> binary().
+to_binary(_Elem, _Pretty, _CData) ->
     erlang:nif_error(not_loaded).
 
 -spec parse(Bin :: binary() | [binary()]) -> {ok, exml:element()} | {error, Reason :: any()}.
