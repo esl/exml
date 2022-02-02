@@ -67,6 +67,8 @@ namespace {
   ERL_NIF_TERM atom_xmlstreamstart;
   ERL_NIF_TERM atom_xmlstreamend;
   ERL_NIF_TERM atom_pretty;
+  ERL_NIF_TERM atom_node_data;
+  ERL_NIF_TERM atom_node_cdata;
   ERL_NIF_TERM atom_true;
   constexpr const unsigned char EMPTY[1] = {0};
 
@@ -290,15 +292,15 @@ ERL_NIF_TERM make_xmlel(ParseCtx &ctx,
 }
 
 bool build_children(ErlNifEnv *env, xml_document &doc, ERL_NIF_TERM children,
-                    rapidxml::xml_node<unsigned char> &node);
+                    rapidxml::xml_node<unsigned char> &node, rapidxml::node_type cdata_type);
 
 bool build_cdata(ErlNifEnv *env, xml_document &doc, const ERL_NIF_TERM elem[],
-                 rapidxml::xml_node<unsigned char> &node) {
+                 rapidxml::xml_node<unsigned char> &node, rapidxml::node_type cdata_type) {
   ErlNifBinary bin;
   if (!enif_inspect_iolist_as_binary(env, elem[1], &bin))
     return false;
 
-  auto child = doc.impl.allocate_node(rapidxml::node_data);
+  auto child = doc.impl.allocate_node(cdata_type);
   child->value(bin.size > 0 ? bin.data : EMPTY, bin.size);
   node.append_node(child);
   return true;
@@ -333,7 +335,7 @@ bool build_attrs(ErlNifEnv *env, xml_document &doc, ERL_NIF_TERM attrs,
 }
 
 bool build_el(ErlNifEnv *env, xml_document &doc, const ERL_NIF_TERM elem[],
-              rapidxml::xml_node<unsigned char> &node) {
+              rapidxml::xml_node<unsigned char> &node, rapidxml::node_type cdata_type) {
   ErlNifBinary name;
   if (!enif_inspect_iolist_as_binary(env, elem[1], &name))
     return false;
@@ -344,24 +346,24 @@ bool build_el(ErlNifEnv *env, xml_document &doc, const ERL_NIF_TERM elem[],
 
   if (!build_attrs(env, doc, elem[2], *child))
     return false;
-  if (!build_children(env, doc, elem[3], *child))
+  if (!build_children(env, doc, elem[3], *child, cdata_type))
     return false;
 
   return true;
 }
 
 bool build_child(ErlNifEnv *env, xml_document &doc, ERL_NIF_TERM child,
-                 rapidxml::xml_node<unsigned char> &node) {
+                 rapidxml::xml_node<unsigned char> &node, rapidxml::node_type cdata_type) {
   int arity;
   const ERL_NIF_TERM *tuple;
   if (!enif_get_tuple(env, child, &arity, &tuple))
     return false;
 
   if (arity == 2 && enif_compare(atom_xmlcdata, tuple[0]) == 0) {
-    if (!build_cdata(env, doc, tuple, node))
+    if (!build_cdata(env, doc, tuple, node, cdata_type))
       return false;
   } else if (arity == 4 && enif_compare(atom_xmlel, tuple[0]) == 0) {
-    if (!build_el(env, doc, tuple, node))
+    if (!build_el(env, doc, tuple, node, cdata_type))
       return false;
   } else {
     return false;
@@ -371,14 +373,14 @@ bool build_child(ErlNifEnv *env, xml_document &doc, ERL_NIF_TERM child,
 }
 
 bool build_children(ErlNifEnv *env, xml_document &doc, ERL_NIF_TERM children,
-                    rapidxml::xml_node<unsigned char> &node) {
+                    rapidxml::xml_node<unsigned char> &node, rapidxml::node_type cdata_type) {
 
   if (!enif_is_list(env, children))
     return false;
 
   for (ERL_NIF_TERM head;
        enif_get_list_cell(env, children, &head, &children);) {
-    if (!build_child(env, doc, head, node))
+    if (!build_child(env, doc, head, node, cdata_type))
       return false;
   }
 
@@ -442,6 +444,8 @@ static int load(ErlNifEnv *env, void **priv_data, ERL_NIF_TERM load_info) {
   atom_xmlstreamstart = enif_make_atom(env, "xmlstreamstart");
   atom_xmlstreamend = enif_make_atom(env, "xmlstreamend");
   atom_pretty = enif_make_atom(env, "pretty");
+  atom_node_data = enif_make_atom(env, "node_data");
+  atom_node_cdata = enif_make_atom(env, "node_cdata");
   atom_true = enif_make_atom(env, "true");
 
   get_static_doc().impl.set_allocator(enif_alloc, enif_free);
@@ -582,7 +586,11 @@ static ERL_NIF_TERM escape_cdata(ErlNifEnv *env, int argc,
   if (!enif_inspect_iolist_as_binary(env, argv[0], &bin))
     return enif_make_badarg(env);
 
-  rapidxml::xml_node<unsigned char> node(rapidxml::node_data);
+  auto cdata_type = rapidxml::node_data;
+  if (enif_compare(atom_node_cdata, argv[1]) == 0)
+    cdata_type = rapidxml::node_cdata;
+
+  rapidxml::xml_node<unsigned char> node(cdata_type);
   node.value(bin.data, bin.size);
   return node_to_binary(env, node, rapidxml::print_no_indenting);
 }
@@ -601,8 +609,12 @@ static ERL_NIF_TERM to_binary(ErlNifEnv *env, int argc,
   if (enif_compare(atom_pretty, argv[1]) == 0)
     flags = 0;
 
+  auto cdata_type = rapidxml::node_data;
+  if (enif_compare(atom_node_cdata, argv[2]) == 0)
+    cdata_type = rapidxml::node_cdata;
+
   xml_document &doc = get_static_doc();
-  if (!build_el(env, doc, xmlel, doc.impl))
+  if (!build_el(env, doc, xmlel, doc.impl, cdata_type))
     return enif_make_badarg(env);
 
   return node_to_binary(env, doc.impl, flags);
@@ -621,8 +633,8 @@ static ERL_NIF_TERM reset_parser(ErlNifEnv *env, int argc,
 
 static ErlNifFunc nif_funcs[] = {
     {"create", 2, create},         {"parse", 1, parse},
-    {"parse_next", 2, parse_next}, {"escape_cdata", 1, escape_cdata},
-    {"to_binary", 2, to_binary},   {"reset_parser", 1, reset_parser}};
+    {"parse_next", 2, parse_next}, {"escape_cdata", 2, escape_cdata},
+    {"to_binary", 3, to_binary},   {"reset_parser", 1, reset_parser}};
 }
 
 ERL_NIF_INIT(exml_nif, nif_funcs, &load, nullptr, nullptr, &unload)
