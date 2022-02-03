@@ -86,11 +86,11 @@ to_list(Element) ->
 to_binary(Element) ->
     iolist_to_binary(to_iolist(Element, not_pretty)).
 
--spec to_iolist(element() | [exml_stream:element()]) -> iodata().
+-spec to_iolist(element() | [exml_stream:element()]) -> binary().
 to_iolist(Element) ->
     iolist_to_binary(to_iolist(Element, not_pretty)).
 
--spec to_pretty_iolist(element() | [exml_stream:element()]) -> iodata().
+-spec to_pretty_iolist(element() | [exml_stream:element()]) -> binary().
 to_pretty_iolist(Element) ->
     iolist_to_binary(to_iolist(Element, pretty)).
 

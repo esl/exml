@@ -59,51 +59,22 @@ private:
 };
 
 namespace {
-ErlNifEnv *global_env;
-ERL_NIF_TERM atom_ok;
-ERL_NIF_TERM atom_error;
-ERL_NIF_TERM atom_undefined;
-ERL_NIF_TERM atom_xmlel;
-ERL_NIF_TERM atom_xmlcdata;
-ERL_NIF_TERM atom_xmlstreamstart;
-ERL_NIF_TERM atom_xmlstreamend;
-ERL_NIF_TERM atom_pretty;
-ERL_NIF_TERM atom_true;
-constexpr const unsigned char EMPTY[1] = {0};
+  ERL_NIF_TERM atom_ok;
+  ERL_NIF_TERM atom_error;
+  ERL_NIF_TERM atom_undefined;
+  ERL_NIF_TERM atom_xmlel;
+  ERL_NIF_TERM atom_xmlcdata;
+  ERL_NIF_TERM atom_xmlstreamstart;
+  ERL_NIF_TERM atom_xmlstreamend;
+  ERL_NIF_TERM atom_pretty;
+  ERL_NIF_TERM atom_true;
+  constexpr const unsigned char EMPTY[1] = {0};
 
-class Version {
-public:
-  Version(const std::string str) {
-    for (std::size_t i = 0; i < str.size();) {
-      auto dot_idx = std::min(str.find(".", i), str.size());
-      std::string version_part(str.cbegin() + i, str.cbegin() + dot_idx);
-      v.push_back(std::stoi(version_part));
-      i = dot_idx + 1;
-    }
+  xml_document &get_static_doc() {
+    static thread_local xml_document doc;
+    doc.clear();
+    return doc;
   }
-
-  bool operator<(const Version &other) {
-    return std::lexicographical_compare(v.cbegin(), v.cend(), other.v.cbegin(),
-                                        other.v.cend());
-  }
-
-private:
-  std::vector<int> v;
-};
-
-// Before ERTS 9.0, enif_inspect_binary could overwrite data given by a previous
-// enif_inspect_binary
-bool needs_inspect_workaround = false;
-inline void apply_inspect_workaround(ErlNifBinary &bin, xml_document &doc) {
-  if (needs_inspect_workaround && bin.size != 0)
-    bin.data = doc.impl.allocate_string(bin.data, bin.size);
-}
-
-xml_document &get_static_doc() {
-  static thread_local xml_document doc;
-  doc.impl.clear();
-  return doc;
-}
 
 } // namespace
 
@@ -182,7 +153,7 @@ ERL_NIF_TERM make_attr_tuple(ParseCtx &ctx,
 
 ERL_NIF_TERM get_xmlcdata(ParseCtx &ctx,
                           rapidxml::xml_node<unsigned char> *node) {
-  return enif_make_tuple2(ctx.env, enif_make_copy(ctx.env, atom_xmlcdata),
+  return enif_make_tuple2(ctx.env, atom_xmlcdata,
                           to_subbinary(ctx, node->value(), node->value_size()));
 }
 
@@ -198,7 +169,7 @@ ERL_NIF_TERM merge_data_nodes(ParseCtx &ctx,
     node = node->next_sibling();
   }
 
-  return enif_make_tuple2(ctx.env, enif_make_copy(ctx.env, atom_xmlcdata), bin);
+  return enif_make_tuple2(ctx.env, atom_xmlcdata, bin);
 }
 
 void append_pending_data_nodes(ParseCtx &ctx,
@@ -295,29 +266,26 @@ get_open_tag(ParseCtx &ctx, rapidxml::xml_node<unsigned char> *node) {
 
 ERL_NIF_TERM make_stream_start_tuple(ParseCtx &ctx,
                                      rapidxml::xml_node<unsigned char> *node) {
-  ERL_NIF_TERM xmlstreamstart = enif_make_copy(ctx.env, atom_xmlstreamstart);
   auto name_and_attrs = get_open_tag(ctx, node);
-  return enif_make_tuple3(ctx.env, xmlstreamstart, std::get<0>(name_and_attrs),
+  return enif_make_tuple3(ctx.env, atom_xmlstreamstart, std::get<0>(name_and_attrs),
                           std::get<1>(name_and_attrs));
 }
 
 ERL_NIF_TERM make_stream_end_tuple(ParseCtx &ctx) {
-  ERL_NIF_TERM xmlstreamend = enif_make_copy(ctx.env, atom_xmlstreamend);
   ERL_NIF_TERM name;
   unsigned char *data =
       enif_make_new_binary(ctx.env, ctx.parser->stream_tag.size(), &name);
 
   std::copy(ctx.parser->stream_tag.begin(), ctx.parser->stream_tag.end(), data);
 
-  return enif_make_tuple2(ctx.env, xmlstreamend, name);
+  return enif_make_tuple2(ctx.env, atom_xmlstreamend, name);
 }
 
 ERL_NIF_TERM make_xmlel(ParseCtx &ctx,
                         rapidxml::xml_node<unsigned char> *node) {
-  ERL_NIF_TERM xmlel = enif_make_copy(ctx.env, atom_xmlel);
   auto name_and_attrs = get_open_tag(ctx, node);
   ERL_NIF_TERM children_term = get_children_tuple(ctx, node);
-  return enif_make_tuple4(ctx.env, xmlel, std::get<0>(name_and_attrs),
+  return enif_make_tuple4(ctx.env, atom_xmlel, std::get<0>(name_and_attrs),
                           std::get<1>(name_and_attrs), children_term);
 }
 
@@ -329,8 +297,6 @@ bool build_cdata(ErlNifEnv *env, xml_document &doc, const ERL_NIF_TERM elem[],
   ErlNifBinary bin;
   if (!enif_inspect_iolist_as_binary(env, elem[1], &bin))
     return false;
-
-  apply_inspect_workaround(bin, doc);
 
   auto child = doc.impl.allocate_node(rapidxml::node_data);
   child->value(bin.size > 0 ? bin.data : EMPTY, bin.size);
@@ -354,12 +320,8 @@ bool build_attrs(ErlNifEnv *env, xml_document &doc, ERL_NIF_TERM attrs,
     if (!enif_inspect_iolist_as_binary(env, tuple[0], &key))
       return false;
 
-    apply_inspect_workaround(key, doc);
-
     if (!enif_inspect_iolist_as_binary(env, tuple[1], &value))
       return false;
-
-    apply_inspect_workaround(value, doc);
 
     auto attr = doc.impl.allocate_attribute(key.size > 0 ? key.data : EMPTY,
                                             value.size > 0 ? value.data : EMPTY,
@@ -375,8 +337,6 @@ bool build_el(ErlNifEnv *env, xml_document &doc, const ERL_NIF_TERM elem[],
   ErlNifBinary name;
   if (!enif_inspect_iolist_as_binary(env, elem[1], &name))
     return false;
-
-  apply_inspect_workaround(name, doc);
 
   auto child = doc.impl.allocate_node(rapidxml::node_element);
   child->name(name.size > 0 ? name.data : EMPTY, name.size);
@@ -472,23 +432,17 @@ static void delete_parser(ErlNifEnv *env, void *parser) {
 }
 
 static int load(ErlNifEnv *env, void **priv_data, ERL_NIF_TERM load_info) {
-  ErlNifSysInfo sys_info;
-  enif_system_info(&sys_info, sizeof(ErlNifSysInfo));
-  if (Version{sys_info.erts_version} < Version{"9.0"})
-    needs_inspect_workaround = true;
-
   parser_type = enif_open_resource_type(
       env, "exml_nif", "parser", &delete_parser, ERL_NIF_RT_CREATE, nullptr);
-  global_env = enif_alloc_env();
-  atom_ok = enif_make_atom(global_env, "ok");
-  atom_error = enif_make_atom(global_env, "error");
-  atom_undefined = enif_make_atom(global_env, "undefined");
-  atom_xmlel = enif_make_atom(global_env, "xmlel");
-  atom_xmlcdata = enif_make_atom(global_env, "xmlcdata");
-  atom_xmlstreamstart = enif_make_atom(global_env, "xmlstreamstart");
-  atom_xmlstreamend = enif_make_atom(global_env, "xmlstreamend");
-  atom_pretty = enif_make_atom(global_env, "pretty");
-  atom_true = enif_make_atom(global_env, "true");
+  atom_ok = enif_make_atom(env, "ok");
+  atom_error = enif_make_atom(env, "error");
+  atom_undefined = enif_make_atom(env, "undefined");
+  atom_xmlel = enif_make_atom(env, "xmlel");
+  atom_xmlcdata = enif_make_atom(env, "xmlcdata");
+  atom_xmlstreamstart = enif_make_atom(env, "xmlstreamstart");
+  atom_xmlstreamend = enif_make_atom(env, "xmlstreamend");
+  atom_pretty = enif_make_atom(env, "pretty");
+  atom_true = enif_make_atom(env, "true");
 
   get_static_doc().impl.set_allocator(enif_alloc, enif_free);
 
@@ -496,7 +450,7 @@ static int load(ErlNifEnv *env, void **priv_data, ERL_NIF_TERM load_info) {
 }
 
 static void unload(ErlNifEnv *env, void *priv_data) {
-  enif_free_env(global_env);
+  return;
 }
 
 static ERL_NIF_TERM create(ErlNifEnv *env, int argc,
@@ -513,7 +467,7 @@ static ERL_NIF_TERM create(ErlNifEnv *env, int argc,
 
   ERL_NIF_TERM term = enif_make_resource(env, parser);
   enif_release_resource(parser);
-  return enif_make_tuple2(env, enif_make_copy(env, atom_ok), term);
+  return enif_make_tuple2(env, atom_ok, term);
 }
 
 static ERL_NIF_TERM parse_next(ErlNifEnv *env, int argc,
@@ -586,19 +540,19 @@ static ERL_NIF_TERM parse_next(ErlNifEnv *env, int argc,
     if (parser->max_child_size &&
         Parser::buffer.size() - offset >= parser->max_child_size)
       return enif_make_tuple2(
-          env, enif_make_copy(env, atom_error),
+          env, atom_error,
           enif_make_string(env, "child element too big", ERL_NIF_LATIN1));
 
     result.rest = Parser::buffer.data() + offset;
-    element = enif_make_copy(env, atom_undefined);
+    element = atom_undefined;
   } else if (result.has_error) {
     return enif_make_tuple2(
-        env, enif_make_copy(env, atom_error),
+        env, atom_error,
         enif_make_string(env, result.error_message.c_str(), ERL_NIF_LATIN1));
   }
 
   return enif_make_tuple3(
-      env, enif_make_copy(env, atom_ok), element,
+      env, atom_ok, element,
       enif_make_uint64(env, result.rest - Parser::buffer.data()));
 }
 
@@ -614,11 +568,11 @@ static ERL_NIF_TERM parse(ErlNifEnv *env, int argc, const ERL_NIF_TERM argv[]) {
 
   if (!result.has_error) {
     ERL_NIF_TERM element = make_xmlel(ctx, doc.impl.first_node());
-    return enif_make_tuple2(env, enif_make_copy(env, atom_ok), element);
+    return enif_make_tuple2(env, atom_ok, element);
   }
 
   return enif_make_tuple2(
-      env, enif_make_copy(env, atom_error),
+      env, atom_error,
       enif_make_string(env, result.error_message.c_str(), ERL_NIF_LATIN1));
 }
 
@@ -662,7 +616,7 @@ static ERL_NIF_TERM reset_parser(ErlNifEnv *env, int argc,
     return enif_make_badarg(env);
 
   parser->reset();
-  return enif_make_copy(env, atom_ok);
+  return atom_ok;
 }
 
 static ErlNifFunc nif_funcs[] = {
