@@ -83,18 +83,22 @@ xml_sort(#xmlstreamend{} = StreamEnd) ->
 xml_sort(Elements) when is_list(Elements) ->
     lists:sort([ xml_sort(E) || E <- Elements ]).
 
+%% @equiv erlang:binary_to_list(to_binary(Element))
 -spec to_list(element() | [exml_stream:element()]) -> string().
 to_list(Element) ->
     binary_to_list(to_binary(Element)).
 
+%% @equiv erlang:iolist_to_binary(to_iolist(Element, pretty, node_data))
 -spec to_binary(element() | [exml_stream:element()]) -> binary().
 to_binary(Element) ->
     iolist_to_binary(to_iolist(Element, not_pretty, node_data)).
 
+%% @equiv to_iolist(Element, not_pretty, node_data)
 -spec to_iolist(element() | [exml_stream:element()]) -> iodata().
 to_iolist(Element) ->
     to_iolist(Element, not_pretty, node_data).
 
+%% @equiv to_iolist(Element, pretty, node_data)
 -spec to_pretty_iolist(element() | [exml_stream:element()]) -> iodata().
 to_pretty_iolist(Element) ->
     to_iolist(Element, pretty, node_data).
@@ -103,6 +107,14 @@ to_pretty_iolist(Element) ->
 parse(XML) ->
     exml_nif:parse(XML).
 
+%% @doc Turn a –list of– exml element into iodata for IO interactions.
+%%
+%% The `Pretty' argument indicates if the generated XML should have new lines and indentation,
+%% which is useful for the debugging eye, or should rather be a minified version,
+%% which is better for IO.
+%%
+%% The `CDataEscape' argument indicates how to escape contents in the XML payload, as regular data
+%% that would escape character by character, or using a `<![CDATA[]]>' section.
 -spec to_iolist(exml_stream:element() | [exml_stream:element()], prettify(), cdata_escape()) ->
     iodata().
 to_iolist(#xmlel{} = Element, Pretty, CDataEscape) ->
