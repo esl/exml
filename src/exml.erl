@@ -90,19 +90,20 @@ to_list(Element) ->
 to_binary(Element) ->
     iolist_to_binary(to_iolist(Element, not_pretty, node_data)).
 
--spec to_iolist(element() | [exml_stream:element()]) -> binary().
+-spec to_iolist(element() | [exml_stream:element()]) -> iodata().
 to_iolist(Element) ->
-    iolist_to_binary(to_iolist(Element, not_pretty, node_data)).
+    to_iolist(Element, not_pretty, node_data).
 
--spec to_pretty_iolist(element() | [exml_stream:element()]) -> binary().
+-spec to_pretty_iolist(element() | [exml_stream:element()]) -> iodata().
 to_pretty_iolist(Element) ->
-    iolist_to_binary(to_iolist(Element, pretty, node_data)).
+    to_iolist(Element, pretty, node_data).
 
 -spec parse(binary() | [binary()]) -> {ok, exml:element()} | {error, any()}.
 parse(XML) ->
     exml_nif:parse(XML).
 
--spec to_iolist(element() | [exml_stream:element()], prettify(), cdata_escape()) -> iolist().
+-spec to_iolist(exml_stream:element() | [exml_stream:element()], prettify(), cdata_escape()) ->
+    iodata().
 to_iolist(#xmlel{} = Element, Pretty, CDataEscape) ->
     to_binary_nif(Element, Pretty, CDataEscape);
 to_iolist([Element], Pretty, CDataEscape) ->
@@ -118,8 +119,8 @@ to_iolist([Head | _] = Elements, Pretty, CDataEscape) ->
         _ ->
             [to_iolist(El, Pretty, CDataEscape) || El <- Elements]
     end;
-to_iolist(#xmlstreamstart{name = Name, attrs = Attrs}, _Pretty, CDataEscape) ->
-    Result = to_binary_nif(#xmlel{name = Name, attrs = Attrs}, not_pretty, CDataEscape),
+to_iolist(#xmlstreamstart{name = Name, attrs = Attrs}, _Pretty, _CDataEscape) ->
+    Result = to_binary_nif(#xmlel{name = Name, attrs = Attrs}, not_pretty, node_data),
     FrontSize = byte_size(Result) - 2,
     <<Front:FrontSize/binary, "/>">> = Result,
     [Front, $>];
