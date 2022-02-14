@@ -16,6 +16,7 @@
 -export([to_list/1,
          to_binary/1,
          to_iolist/1,
+         to_iolist/3,
          xml_size/1,
          xml_sort/1,
          to_pretty_iolist/1]).

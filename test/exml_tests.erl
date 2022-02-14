@@ -27,6 +27,11 @@ size_of_escaped_characters_test() ->
     Raw = <<"<a>&amp;</a>">>,
     ?assertEqual(iolist_size(Raw), exml:xml_size(parse(Raw))).
 
+to_binary_with_cdata_test() ->
+    Raw = <<"<a><![CDATA[ Within this Character Data block I can ",
+            "use double dashes as much as I want (along with <, &, ', and \")]]></a>">>,
+    ?assertEqual(Raw, exml:to_iolist(parse(Raw), not_pretty, node_cdata)).
+
 size_of_exml_with_cdata_test() ->
     Raw = <<"<a><![CDATA[ Within this Character Data block I can
             use double dashes as much as I want (along with <, &, ', and \")]]></a>">>,
