@@ -1,8 +1,11 @@
 .PHONY: rel deps test
 
-REBARVER = 3.13.2
-ifeq ($(OTPVER),24.0)
-	REBARVER = 3.15.1
+REBARVER = 3.15.2
+ifeq ($(OTPVER),24.3)
+	REBARVER = 3.17.0
+endif
+ifeq ($(OTPVER),25.0)
+	REBARVER = 3.18.0
 endif
 
 all: deps compile
