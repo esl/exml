@@ -267,6 +267,11 @@ namespace rapidxml
     //! and duplicate attributes (with different prefices)
     const int parse_validate_xmlns = 0x4000;
 
+    //! Parse flag instructing the parser to validate control characters.
+    //! https://www.w3.org/TR/2008/REC-xml-20081126/
+    //! Char ::= #x9 | #xA | #xD | [#x20-#xD7FF] | [#xE000-#xFFFD] | [#x10000-#x10FFFF]
+    const int parse_validate_control_chars = 0x8000;
+
     // Compound flags
 
     //! Parse flags which represent default behaviour of the parser.
@@ -312,6 +317,7 @@ namespace rapidxml
         template<int Dummy>
         struct lookup_tables
         {
+            static const unsigned char lookup_control_points[256];           // Forbidden control characters
             static const unsigned char lookup_whitespace[256];              // Whitespace table
             static const unsigned char lookup_node_name[256];               // Node name table
             static const unsigned char lookup_element_name[256];            // Element name table
@@ -1746,6 +1752,15 @@ namespace rapidxml
         // Internal character utility functions
 
         // Detect whitespace character
+        struct control_points_pred
+        {
+            static unsigned char test(Ch ch)
+            {
+                return internal::lookup_tables<0>::lookup_control_points[static_cast<unsigned char>(ch)];
+            }
+        };
+
+        // Detect whitespace character
         struct whitespace_pred
         {
             static unsigned char test(Ch ch)
@@ -1888,9 +1903,20 @@ namespace rapidxml
         static void skip(Ch *&text)
         {
             Ch *tmp = text;
-            while (StopPred::test(*tmp))
+            while (StopPred::test(*tmp)) {
+                check_control<control_points_pred, Flags>(tmp);
                 ++tmp;
+            }
             text = tmp;
+        }
+
+        // Fail if a forbidden control character is found
+        template<class ControlPred, int Flags>
+        static void check_control(Ch *&text)
+        {
+            if (Flags & parse_validate_control_chars)
+                if (!ControlPred::test(*text))
+                    RAPIDXML_PARSE_ERROR("unexpected control character", text);
         }
 
         // Skip characters until predicate evaluates to true while doing the following:
@@ -2074,6 +2100,7 @@ namespace rapidxml
                 while (text[0] != Ch('?') || text[1] != Ch('>'))
                 {
                     if (!text[0]) RAPIDXML_PARSE_ERROR("unexpected end of data", text);
+                    check_control<control_points_pred, Flags>(text);
                     ++text;
                 }
                 text += 2;    // Skip '?>'
@@ -2107,6 +2134,7 @@ namespace rapidxml
                 while (text[0] != Ch('-') || text[1] != Ch('-') || text[2] != Ch('>'))
                 {
                     if (!text[0]) RAPIDXML_PARSE_ERROR("unexpected end of data", text);
+                    check_control<control_points_pred, Flags>(text);
                     ++text;
                 }
                 text += 3;     // Skip '-->'
@@ -2120,6 +2148,7 @@ namespace rapidxml
             while (text[0] != Ch('-') || text[1] != Ch('-') || text[2] != Ch('>'))
             {
                 if (!text[0]) RAPIDXML_PARSE_ERROR("unexpected end of data", text);
+                check_control<control_points_pred, Flags>(text);
                 ++text;
             }
 
@@ -2328,8 +2357,8 @@ namespace rapidxml
                 // Skip until end of cdata
                 while (text[0] != Ch(']') || text[1] != Ch(']') || text[2] != Ch('>'))
                 {
-                    if (!text[0])
-                        RAPIDXML_PARSE_ERROR("unexpected end of data", text);
+                    if (!text[0]) RAPIDXML_PARSE_ERROR("unexpected end of data", text);
+                    check_control<control_points_pred, Flags>(text);
                     ++text;
                 }
                 text += 3;      // Skip ]]>
@@ -2340,8 +2369,8 @@ namespace rapidxml
             Ch *value = text;
             while (text[0] != Ch(']') || text[1] != Ch(']') || text[2] != Ch('>'))
             {
-                if (!text[0])
-                    RAPIDXML_PARSE_ERROR("unexpected end of data", text);
+                if (!text[0]) RAPIDXML_PARSE_ERROR("unexpected end of data", text);
+                check_control<control_points_pred, Flags>(text);
                 ++text;
             }
 
@@ -2654,6 +2683,29 @@ namespace rapidxml
     //! \cond internal
     namespace internal
     {
+
+        // Char ::= #x9 | #xA | #xD | [#x20-#xD7FF] | [#xE000-#xFFFD] | [#x10000-#x10FFFF]
+        template<int Dummy>
+        const unsigned char lookup_tables<Dummy>::lookup_control_points[256] =
+        {
+          // 0   1   2   3   4   5   6   7   8   9   A   B   C   D   E   F
+             0,  0,  0,  0,  0,  0,  0,  0,  0,  1,  1,  0,  0,  1,  0,  0,  // 0
+             0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  // 1
+             1,  1,  1,  1,  1,  1,  1,  1,  1,  1,  1,  1,  1,  1,  1,  1,  // 2
+             1,  1,  1,  1,  1,  1,  1,  1,  1,  1,  1,  1,  1,  1,  1,  1,  // 3
+             1,  1,  1,  1,  1,  1,  1,  1,  1,  1,  1,  1,  1,  1,  1,  1,  // 4
+             1,  1,  1,  1,  1,  1,  1,  1,  1,  1,  1,  1,  1,  1,  1,  1,  // 5
+             1,  1,  1,  1,  1,  1,  1,  1,  1,  1,  1,  1,  1,  1,  1,  1,  // 6
+             1,  1,  1,  1,  1,  1,  1,  1,  1,  1,  1,  1,  1,  1,  1,  1,  // 7
+             1,  1,  1,  1,  1,  1,  1,  1,  1,  1,  1,  1,  1,  1,  1,  1,  // 8
+             1,  1,  1,  1,  1,  1,  1,  1,  1,  1,  1,  1,  1,  1,  1,  1,  // 9
+             1,  1,  1,  1,  1,  1,  1,  1,  1,  1,  1,  1,  1,  1,  1,  1,  // A
+             1,  1,  1,  1,  1,  1,  1,  1,  1,  1,  1,  1,  1,  1,  1,  1,  // B
+             1,  1,  1,  1,  1,  1,  1,  1,  1,  1,  1,  1,  1,  1,  1,  1,  // C
+             1,  1,  1,  1,  1,  1,  1,  1,  1,  1,  1,  1,  1,  1,  1,  1,  // D
+             1,  1,  1,  1,  1,  1,  1,  1,  1,  1,  1,  1,  1,  1,  1,  1,  // E
+             1,  1,  1,  1,  1,  1,  1,  1,  1,  1,  1,  1,  1,  1,  1,  1   // F
+        };
 
         // Whitespace (space \n \r \t)
         template<int Dummy>
