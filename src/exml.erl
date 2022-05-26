@@ -29,6 +29,7 @@
 -type cdata() :: #xmlcdata{}.
 -type element() :: #xmlel{}.
 -type item() :: element() | attr() | cdata() | exml_stream:start() | exml_stream:stop().
+-type prettify() :: pretty | not_pretty.
 
 -spec xml_size(item() | [item()]) -> non_neg_integer().
 xml_size([]) ->
@@ -78,27 +79,36 @@ xml_sort(#xmlstreamend{} = StreamEnd) ->
 xml_sort(Elements) when is_list(Elements) ->
     lists:sort([ xml_sort(E) || E <- Elements ]).
 
+%% @equiv erlang:binary_to_list(to_binary(Element))
 -spec to_list(element() | [exml_stream:element()]) -> string().
 to_list(Element) ->
     binary_to_list(to_binary(Element)).
 
+%% @equiv erlang:iolist_to_binary(to_iolist(Element, not_pretty))
 -spec to_binary(element() | [exml_stream:element()]) -> binary().
 to_binary(Element) ->
     iolist_to_binary(to_iolist(Element, not_pretty)).
 
--spec to_iolist(element() | [exml_stream:element()]) -> binary().
+%% @equiv to_iolist(Element, not_pretty)
+-spec to_iolist(element() | [exml_stream:element()]) -> iodata().
 to_iolist(Element) ->
-    iolist_to_binary(to_iolist(Element, not_pretty)).
+    to_iolist(Element, not_pretty).
 
--spec to_pretty_iolist(element() | [exml_stream:element()]) -> binary().
+%% @equiv to_iolist(Element, pretty)
+-spec to_pretty_iolist(element() | [exml_stream:element()]) -> iodata().
 to_pretty_iolist(Element) ->
-    iolist_to_binary(to_iolist(Element, pretty)).
+    to_iolist(Element, pretty).
 
 -spec parse(binary() | [binary()]) -> {ok, exml:element()} | {error, any()}.
 parse(XML) ->
     exml_nif:parse(XML).
 
--spec to_iolist(element() | [exml_stream:element()], pretty | term()) -> iolist().
+%% @doc Turn a –list of– exml element into iodata for IO interactions.
+%%
+%% The `Pretty' argument indicates if the generated XML should have new lines and indentation,
+%% which is useful for the debugging eye, or should rather be a minified version,
+%% which is better for IO.
+-spec to_iolist(exml_stream:element() | [exml_stream:element()], prettify()) -> iodata().
 to_iolist(#xmlel{} = Element, Pretty) ->
     to_binary_nif(Element, Pretty);
 to_iolist([Element], Pretty) ->
@@ -124,7 +134,7 @@ to_iolist(#xmlstreamend{name = Name}, _Pretty) ->
 to_iolist(#xmlcdata{content = Content}, _Pretty) ->
     exml_nif:escape_cdata(Content).
 
--spec to_binary_nif(element(), pretty | term()) -> binary().
+-spec to_binary_nif(element(), prettify()) -> binary().
 to_binary_nif(#xmlel{} = Element, Pretty) ->
     case catch exml_nif:to_binary(Element, Pretty) of
         {'EXIT', Reason} -> erlang:error({badxml, Element, Reason});
