@@ -1,12 +1,11 @@
 %%%-------------------------------------------------------------------
-%%% @copyright (C) 2018-2021, Erlang Solutions Ltd.
+%%% @copyright (C) 2018-2022, Erlang Solutions Ltd.
 %%% @private
 %%%-------------------------------------------------------------------
 
 -module(exml_nif).
 
--include("exml.hrl").
--include("exml_stream.hrl").
+-nifs([create/2, escape_cdata/1, to_binary/2, parse/1, parse_next/2, reset_parser/1]).
 
 -type parser() :: term().
 -type stream_element() :: exml:element() | exml_stream:start() | exml_stream:stop().
