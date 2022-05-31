@@ -19,6 +19,10 @@ vector_2_forbidden_control_char_test() ->
 vector_3_forbidden_control_char_test() ->
     ?assertMatch({error, _}, exml:parse(<<"<body lang='en' bad='", 16#1B, "'></body>">>)).
 
+vector_4_forbidden_control_char_test() ->
+    ?assertMatch({error, _},
+                 exml:parse(<<"<message to='alice@localhost'><body>&amp;lt;body&amp;gt;", 16#1B,"&amp;lt;/body&amp;gt;</body></body>">>)).
+
 fail_forbidden_control_char_test() ->
     p("All valid xml cdata can be parsed",
       ?FORALL(Doc, utf8_doc_bad(),

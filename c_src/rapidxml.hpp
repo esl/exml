@@ -2063,6 +2063,7 @@ namespace rapidxml
                 }
 
                 // No replacement, only copy character
+                check_control<control_points_pred, Flags>(src);
                 *dest++ = *src++;
 
             }
