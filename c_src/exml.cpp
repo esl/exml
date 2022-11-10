@@ -11,8 +11,8 @@
 
 #include <algorithm>
 #include <chrono>
+#include <cstring>
 #include <iostream>
-#include <optional>
 #include <string>
 #include <thread>
 #include <vector>
@@ -481,24 +481,19 @@ static ERL_NIF_TERM parse_next(ErlNifEnv *env, int argc,
   if (!parser->copy_buffer(env, argv[1]))
     return enif_make_badarg(env);
 
-  // Skip initial whitespace even if we don't manage to parse anything.
-  // Also needed for has_stream_closing_tag to recognize the tag.
   // Raise an exception when null character is found.
-
-  std::size_t offset = 0;
-  bool offset_set = false;
-
-  for (std::size_t i = 0; i < Parser::buffer.size() - 1; i++) {
-    unsigned char byte = Parser::buffer[i];
-    if (byte == 0) {
-      return enif_make_tuple2(
+  const char *data = reinterpret_cast<const char*>(&Parser::buffer[0]);
+  if (std::strlen(data) != Parser::buffer.size() - 1)
+    return enif_make_tuple2(
         env, atom_error,
         enif_make_string(env, "null character found in buffer", ERL_NIF_LATIN1));
-    } else if (!std::isspace(byte) && !offset_set) {
-      offset = i;
-      offset_set = true;
-    }
-  }
+
+  // Skip initial whitespace even if we don't manage to parse anything.
+  // Also needed for has_stream_closing_tag to recognize the tag.
+  std::size_t offset = 0;
+  while (offset < Parser::buffer.size() - 1 &&
+         std::isspace(Parser::buffer[offset]))
+    ++offset;
 
   ParseCtx ctx{env, parser};
   xml_document::ParseResult result;
