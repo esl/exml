@@ -481,13 +481,6 @@ static ERL_NIF_TERM parse_next(ErlNifEnv *env, int argc,
   if (!parser->copy_buffer(env, argv[1]))
     return enif_make_badarg(env);
 
-  // Raise an exception when null character is found.
-  const char *data = reinterpret_cast<const char*>(&Parser::buffer[0]);
-  if (std::strlen(data) != Parser::buffer.size() - 1)
-    return enif_make_tuple2(
-        env, atom_error,
-        enif_make_string(env, "null character found in buffer", ERL_NIF_LATIN1));
-
   // Skip initial whitespace even if we don't manage to parse anything.
   // Also needed for has_stream_closing_tag to recognize the tag.
   std::size_t offset = 0;
@@ -558,6 +551,13 @@ static ERL_NIF_TERM parse_next(ErlNifEnv *env, int argc,
         env, atom_error,
         enif_make_string(env, result.error_message.c_str(), ERL_NIF_LATIN1));
   }
+
+  // Raise an exception when null character is found.
+  std::size_t rest_size = &Parser::buffer.back() - result.rest;
+  if (std::strlen(reinterpret_cast<const char*>(result.rest)) != rest_size)
+    return enif_make_tuple2(
+        env, atom_error,
+        enif_make_string(env, "null character found in buffer", ERL_NIF_LATIN1));
 
   return enif_make_tuple3(
       env, atom_ok, element,
