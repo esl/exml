@@ -80,22 +80,22 @@ xml_sort(Elements) when is_list(Elements) ->
     lists:sort([ xml_sort(E) || E <- Elements ]).
 
 %% @equiv erlang:binary_to_list(to_binary(Element))
--spec to_list(element() | [exml_stream:element()]) -> string().
+-spec to_list(exml_stream:element() | [exml_stream:element()]) -> string().
 to_list(Element) ->
     binary_to_list(to_binary(Element)).
 
 %% @equiv erlang:iolist_to_binary(to_iolist(Element, not_pretty))
--spec to_binary(element() | [exml_stream:element()]) -> binary().
+-spec to_binary(exml_stream:element() | [exml_stream:element()]) -> binary().
 to_binary(Element) ->
     iolist_to_binary(to_iolist(Element, not_pretty)).
 
 %% @equiv to_iolist(Element, not_pretty)
--spec to_iolist(element() | [exml_stream:element()]) -> iodata().
+-spec to_iolist(exml_stream:element() | [exml_stream:element()]) -> iodata().
 to_iolist(Element) ->
     to_iolist(Element, not_pretty).
 
 %% @equiv to_iolist(Element, pretty)
--spec to_pretty_iolist(element() | [exml_stream:element()]) -> iodata().
+-spec to_pretty_iolist(exml_stream:element() | [exml_stream:element()]) -> iodata().
 to_pretty_iolist(Element) ->
     to_iolist(Element, pretty).
 
