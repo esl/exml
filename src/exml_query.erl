@@ -182,21 +182,11 @@ subelement_with_name_and_ns(Element, Name, NS) ->
 -spec subelement_with_name_and_ns(exml:element(), binary(), binary(), Other) ->
     exml:element() | Other.
 subelement_with_name_and_ns(Element, Name, NS, Default) ->
-    case subelement(Element, Name, undefined) of
-        undefined ->
+    case subelements_with_name_and_ns(Element, Name, NS) of
+        [] ->
             Default;
-        #xmlcdata{} ->
-            Default;
-        #xmlel{} = SubElement ->
-            subelement_or_default(SubElement, NS, Default)
-    end.
-
-subelement_or_default(SubElement, NS, Default) ->
-    case attr(SubElement, <<"xmlns">>) of
-        NS ->
-            SubElement;
-        _ ->
-            Default
+        [FirstElem | _] ->
+            FirstElem
     end.
 
 -spec subelements(exml:element(), binary()) -> [exml:element()].
