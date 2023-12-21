@@ -160,7 +160,7 @@ conv_attr_test() ->
 -define(RESTART_TEST_STREAM, <<"<stream:stream xmlns:stream='something'><quote/><stream:stream xmlns:stream='else'><other/><things/>">>).
 
 stream_restarts_test() ->
-    {ok, Parser0} = exml_stream:new_parser([{start_tag, <<"stream:stream">>}]),
+    {ok, Parser0} = exml_stream:new_parser([]),
     {ok, _Parser1, Elements} = exml_stream:parse(Parser0, ?RESTART_TEST_STREAM),
     ?assertMatch(
         [#xmlstreamstart{name = <<"stream:stream">>},
@@ -174,7 +174,7 @@ stream_restarts_test() ->
                                       "<?xml version='1.0'?><stream:stream xmlns:stream='a'><other/>">>).
 
 stream_restarts_with_xml_declaration_test() ->
-    {ok, Parser0} = exml_stream:new_parser([{start_tag, <<"stream:stream">>}]),
+    {ok, Parser0} = exml_stream:new_parser([]),
     {ok, _Parser1, Elements} = exml_stream:parse(Parser0, ?RESTART_TEST_STREAM_XMLDEC),
     ?assertMatch(
         [#xmlstreamstart{name = <<"stream:stream">>},
@@ -229,7 +229,7 @@ stream_max_incomplete_root_element_size_test() ->
     ?assertEqual({error, "element too big"}, exml_stream:parse(Parser1, <<"<c>1234</c">>)).
 
 infinite_stream_partial_chunk_test() ->
-    {ok, Parser0} = exml_stream:new_parser([{infinite_stream, true}, {autoreset, true}]),
+    {ok, Parser0} = exml_stream:new_parser([{infinite_stream, true}]),
     {ok, Parser1, Open} = exml_stream:parse(Parser0, <<"<open xmlns='urn:ietf:params:xml:ns:xmpp-framing' to='i.am.banana.com' version='1.0'/>">>),
     ?assertEqual(
        [#xmlel{name = <<"open">>,
