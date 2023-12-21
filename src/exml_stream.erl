@@ -29,11 +29,11 @@
 -type stop() :: #xmlstreamend{}.
 -type element() :: exml_nif:stream_element().
 -type parser() :: #parser{}.
-%% infinite_stream - no distinct "stream start" or "stream end", only #xmlel{} will be returned
-%% max_child_size - specifies maximum byte size of any child of the root element. The byte size is
-%%                  counted from the start tag until the opening character of its end tag. Disabled
-%%                  if set to 0 (default).
--type parser_opt() :: {infinite_stream, boolean()} | {max_child_size, non_neg_integer()}.
+%% infinite_stream - No distinct "stream start" or "stream end", only #xmlel{} will be returned.
+%% max_element_size - Specifies maximum byte size of any parsed XML element.
+%%                    The only exception is the "stream start" element,
+%%                    for which only the size of the opening tag is limited.
+-type parser_opt() :: {infinite_stream, boolean()} | {max_element_size, non_neg_integer()}.
 
 %%%===================================================================
 %%% Public API
@@ -45,9 +45,9 @@ new_parser() ->
 
 -spec new_parser([parser_opt()]) -> {ok, parser()} | {error, any()}.
 new_parser(Opts)->
-    MaxChildSize = proplists:get_value(max_child_size, Opts, 0),
+    MaxElementSize = proplists:get_value(max_element_size, Opts, 0),
     InfiniteStream = proplists:get_value(infinite_stream, Opts, false),
-    case exml_nif:create(MaxChildSize, InfiniteStream) of
+    case exml_nif:create(MaxElementSize, InfiniteStream) of
         {ok, EventParser} ->
             {ok, #parser{event_parser = EventParser, buffer = []}};
         Error ->
