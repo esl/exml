@@ -81,7 +81,7 @@ namespace {
 
 struct Parser {
   ustring stream_tag;
-  std::uint64_t max_child_size = 0;
+  std::uint64_t max_element_size = 0;
   bool infinite_stream = false;
 
   static thread_local std::vector<unsigned char> buffer;
@@ -459,10 +459,10 @@ static ERL_NIF_TERM create(ErlNifEnv *env, int argc,
   void *mem = enif_alloc_resource(parser_type, sizeof(Parser));
   Parser *parser = new (mem) Parser;
 
-  ErlNifUInt64 max_child_size;
-  if (!enif_get_uint64(env, argv[0], &max_child_size))
+  ErlNifUInt64 max_element_size;
+  if (!enif_get_uint64(env, argv[0], &max_element_size))
     return enif_make_badarg(env);
-  parser->max_child_size = static_cast<std::uint64_t>(max_child_size);
+  parser->max_element_size = static_cast<std::uint64_t>(max_element_size);
   if (enif_compare(atom_true, argv[1]) == 0)
     parser->infinite_stream = true;
 
@@ -491,6 +491,7 @@ static ERL_NIF_TERM parse_next(ErlNifEnv *env, int argc,
   ParseCtx ctx{env, parser};
   xml_document::ParseResult result;
   ERL_NIF_TERM element;
+  const char *error_msg = nullptr;
 
   xml_document &doc = get_static_doc();
   Parser::term_buffer.clear();
@@ -498,10 +499,15 @@ static ERL_NIF_TERM parse_next(ErlNifEnv *env, int argc,
   auto parseStreamOpen = [&] {
     result = doc.parse<parse_open_only()>(Parser::buffer.data() + offset);
     if (!result.has_error) {
-      auto name_tag = node_name(doc.impl.first_node());
-      parser->stream_tag =
+      if (parser->max_element_size &&
+          result.rest - Parser::buffer.data() - offset > parser->max_element_size) {
+        error_msg = "element too big";
+      } else {
+        auto name_tag = node_name(doc.impl.first_node());
+        parser->stream_tag =
           ustring{std::get<0>(name_tag), std::get<1>(name_tag)};
-      element = make_stream_start_tuple(ctx, doc.impl.first_node());
+        element = make_stream_start_tuple(ctx, doc.impl.first_node());
+      }
     }
   };
 
@@ -515,10 +521,20 @@ static ERL_NIF_TERM parse_next(ErlNifEnv *env, int argc,
            parser->stream_tag;
   };
 
-  if (parser->infinite_stream) {
+  auto parseElement = [&] {
     result = doc.parse<parse_one()>(Parser::buffer.data() + offset);
-    if (!result.has_error)
-      element = make_xmlel(ctx, doc.impl.first_node());
+    if (!result.has_error) {
+      if (parser->max_element_size &&
+        result.rest - Parser::buffer.data() - offset > parser->max_element_size) {
+        error_msg = "element too big";
+      } else {
+        element = make_xmlel(ctx, doc.impl.first_node());
+      }
+    }
+  };
+
+  if (parser->infinite_stream) {
+    parseElement();
   } else if (parser->stream_tag.empty()) {
     parseStreamOpen();
   } else if (has_stream_closing_tag(parser, offset)) {
@@ -527,9 +543,7 @@ static ERL_NIF_TERM parse_next(ErlNifEnv *env, int argc,
     result.rest = &*Parser::buffer.rbegin();
     element = make_stream_end_tuple(ctx);
   } else {
-    result = doc.parse<parse_one()>(Parser::buffer.data() + offset);
-    if (!result.has_error)
-      element = make_xmlel(ctx, doc.impl.first_node());
+    parseElement();
   }
 
   if (result.eof && hasStreamReopen()) {
@@ -538,26 +552,30 @@ static ERL_NIF_TERM parse_next(ErlNifEnv *env, int argc,
   }
 
   if (result.eof) {
-    if (parser->max_child_size &&
-        Parser::buffer.size() - offset >= parser->max_child_size)
-      return enif_make_tuple2(
-          env, atom_error,
-          enif_make_string(env, "child element too big", ERL_NIF_LATIN1));
-
-    result.rest = Parser::buffer.data() + offset;
-    element = atom_undefined;
+    // Return an error if an incomplete element has at least max_element_size characters.
+    if (parser->max_element_size &&
+        Parser::buffer.size() - offset > parser->max_element_size) {
+      error_msg = "element too big";
+    } else {
+      result.rest = Parser::buffer.data() + offset;
+      element = atom_undefined;
+    }
   } else if (result.has_error) {
-    return enif_make_tuple2(
-        env, atom_error,
-        enif_make_string(env, result.error_message.c_str(), ERL_NIF_LATIN1));
+    error_msg = result.error_message.c_str();
   }
 
-  // Raise an exception when null character is found.
-  std::size_t rest_size = &Parser::buffer.back() - result.rest;
-  if (std::strlen(reinterpret_cast<const char*>(result.rest)) != rest_size)
+  if (!error_msg) {
+    // Return an error when null character is found.
+    std::size_t rest_size = &Parser::buffer.back() - result.rest;
+    if (std::strlen(reinterpret_cast<const char*>(result.rest)) != rest_size)
+      error_msg = "null character found in buffer";
+  }
+
+  if (error_msg) {
     return enif_make_tuple2(
         env, atom_error,
-        enif_make_string(env, "null character found in buffer", ERL_NIF_LATIN1));
+        enif_make_string(env, error_msg, ERL_NIF_LATIN1));
+  }
 
   return enif_make_tuple3(
       env, atom_ok, element,
