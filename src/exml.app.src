@@ -10,7 +10,7 @@
   {modules, []},
   {maintainers, ["ESL"]},
   {pkg_name, "hexml"},
-  {licenses, ["Apache 2.0", "Boost Software License 1.0 (C++ code)", "GPL (tests)"]},
+  {licenses, ["Apache-2.0", "BSL-1.0", "GPL (tests)"]},
   {links, [{"GitHub", "https://github.com/esl/exml/"}]},
   {exclude_files, ["c_src/exml.d"]}
  ]}.
