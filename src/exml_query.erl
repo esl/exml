@@ -1,5 +1,5 @@
 %%%-------------------------------------------------------------------
-%%% @copyright (C) 2011-2021, Erlang Solutions Ltd.
+%%% @copyright (C) 2011-2024, Erlang Solutions Ltd.
 %%% @doc Easy navigation in XML trees
 %%% @end
 %%%-------------------------------------------------------------------
@@ -20,23 +20,36 @@
 -export([attr/2, attr/3]).
 -export([cdata/1]).
 
--type element_with_ns() :: {element_with_ns, binary()}.
--type element_with_name_and_ns () :: {element_with_ns, binary(), binary()}.
--type element_with_attr_of_value () :: {element_with_attr, binary(), binary()}.
 
--type path() :: [cdata | %% selects cdata from the element
-                 {element, binary()} | % selects subelement with given name
-                 {attr, binary()} | % selects attr of given name
-                 element_with_ns() | % selects subelement with given namespace
-                 element_with_name_and_ns() | % selects subelement with given name and namespace
-                 element_with_attr_of_value() % selects subelement with given attribute and value
-                ].
+-type path() :: [cdata |
+                 {attr, binary()} |
+                 {element, binary()} |
+                 {element_with_ns, binary()} |
+                 {element_with_ns, binary(), binary()} |
+                 {element_with_attr, binary(), binary()}].
+%% Path definition in an XML query, each step is defined by one of these types.
+%%
+%% <ul>
+%%  <li>`cdata': selects cdata from the element </li>
+%%  <li>`{attr, Name}': selects a subelement with the given attribute </li>
+%%  <li>`{element, Name}': selects a subelement with the given name </li>
+%%  <li>`{element_with_ns, NS}': selects a subelement with given namespace </li>
+%%  <li>`{element_with_ns, Name, NS}': selects a subelement with given name and namespace </li>
+%%  <li>`{element_with_attr, AttrName, AttrValue}': selects a subelement with the given attribute and value </li>
+%% </ul>
 
 -export_type([path/0]).
 
-%% @doc Gets the element/attr/cdata contained in the leftmost path
-%% Find an element in the xml tree by a path
-%% that is pattern-matched against such xml tree structure
+%%% @doc Like `path/3' but with default `undefined'.
+%%% @see path/3
+-spec path(exml:element(), path()) -> exml:element() | binary() | undefined.
+path(Element, Path) ->
+    path(Element, Path, undefined).
+
+%% @doc Gets the element/attr/cdata in the leftmost possible described path,
+%% or `Default' if there is no match.
+%%
+%% Find an element in the xml tree by a path that is pattern-matched against such xml tree structure.
 %%
 %% For example, given an xml document like
 %% ```
@@ -59,16 +72,9 @@
 %%    {element, <<"body">>},
 %%    cdata}],
 %% '''
-%% would return `<<"Message from bob to alice">>'
+%% will return `<<"Message from bob to alice">>'
 %% @end
--spec path(exml:element(), path()) -> exml:element() | binary() | undefined.
-path(Element, Path) ->
-    path(Element, Path, undefined).
-
-%% @doc Gets the element/attr/cdata in the leftmost possible described path.
-%% Like `path/2' but returns the given `Default' if no element matches the path.
-%%% @see path/2
--spec path(exml:element(), path(), Other) -> exml:element() | binary() | Other.
+-spec path(exml:element(), path(), Default) -> exml:element() | binary() | Default.
 path(#xmlel{} = Element, [], _) ->
     Element;
 path(#xmlel{} = Element, [{element, Name} | Rest], Default) ->
@@ -90,8 +96,8 @@ path(#xmlel{} = Element, [{attr, Name}], Default) ->
 path(_, _, Default) ->
     Default.
 
-%% @doc gets the elements/attrs/cdatas reachable by the described path
-%% @see path/2
+%% @doc Gets the elements/attrs/cdatas reachable by the described path
+%% @see path/3
 -spec paths(exml:element(), path()) -> [exml:element() | binary()].
 paths(#xmlel{} = Element, []) ->
     [Element];
@@ -114,11 +120,13 @@ paths(#xmlel{attrs = Attrs}, [{attr, Name}]) ->
 paths(#xmlel{} = El, Path) when is_list(Path) ->
     erlang:error(invalid_path, [El, Path]).
 
+%% @equiv path(Element, [{element, Name}])
 -spec subelement(exml:element(), binary()) -> exml:element() | undefined.
 subelement(Element, Name) ->
     subelement(Element, Name, undefined).
 
--spec subelement(exml:element(), binary(), Other) -> exml:element() | Other.
+%% @equiv path(Element, [{element, Name}], Default)
+-spec subelement(exml:element(), binary(), Default) -> exml:element() | Default.
 subelement(#xmlel{children = Children}, Name, Default) ->
     case lists:keyfind(Name, #xmlel.name, Children) of
         false ->
@@ -127,11 +135,13 @@ subelement(#xmlel{children = Children}, Name, Default) ->
             Result
     end.
 
+%% @equiv path(Element, [{element_with_ns, NS}])
 -spec subelement_with_ns(exml:element(), binary()) -> exml:element() | undefined.
 subelement_with_ns(Element, NS) ->
     subelement_with_ns(Element, NS, undefined).
 
--spec subelement_with_ns(exml:element(), binary(), Other) -> exml:element() | Other.
+%% @equiv path(Element, [{element_with_ns, NS}], Default)
+-spec subelement_with_ns(exml:element(), binary(), Default) -> exml:element() | Default.
 subelement_with_ns(#xmlel{children = Children}, NS, Default) ->
     child_with_ns(Children, NS, Default).
 
@@ -147,17 +157,19 @@ child_with_ns([#xmlel{} = Element | Rest], NS, Default) ->
 child_with_ns([_ | Rest], NS, Default) ->
     child_with_ns(Rest, NS, Default).
 
+%% @equiv path(Element, [{element_with_attr, AttrName, AttrValue}])
 -spec subelement_with_attr(exml:element(), AttrName :: binary(), AttrValue :: binary()) ->
     exml:element() | undefined.
 subelement_with_attr(Element, AttrName, AttrValue) ->
     subelement_with_attr(Element, AttrName, AttrValue, undefined).
 
--spec subelement_with_attr(Element, AttrName, AttrValue, Other) -> SubElement | Other when
+%% @equiv path(Element, [{element_with_attr, AttrName, AttrValue}], Default)
+-spec subelement_with_attr(Element, AttrName, AttrValue, Default) -> SubElement | Default when
       Element :: exml:element(),
       AttrName :: binary(),
       AttrValue :: binary(),
       SubElement :: exml:element(),
-      Other :: term().
+      Default :: term().
 subelement_with_attr(#xmlel{children = Children}, AttrName, AttrValue, Default) ->
     child_with_attr(Children, AttrName, AttrValue, Default).
 
@@ -173,14 +185,15 @@ child_with_attr([#xmlel{} = Element | Rest], AttrName, AttrVal, Default) ->
 child_with_attr([_ | Rest], AttrName, AttrVal, Default) ->
     child_with_attr(Rest, AttrName, AttrVal, Default).
 
-
+%% @equiv path(Element, [{element_with_ns, Name, NS}])
 -spec subelement_with_name_and_ns(exml:element(), binary(), binary()) ->
     exml:element() | undefined.
 subelement_with_name_and_ns(Element, Name, NS) ->
     subelement_with_name_and_ns(Element, Name, NS, undefined).
 
--spec subelement_with_name_and_ns(exml:element(), binary(), binary(), Other) ->
-    exml:element() | Other.
+%% @equiv path(Element, [{element_with_ns, Name, NS}], Default)
+-spec subelement_with_name_and_ns(exml:element(), binary(), binary(), Default) ->
+    exml:element() | Default.
 subelement_with_name_and_ns(Element, Name, NS, Default) ->
     case subelements_with_name_and_ns(Element, Name, NS) of
         [] ->
@@ -189,6 +202,7 @@ subelement_with_name_and_ns(Element, Name, NS, Default) ->
             FirstElem
     end.
 
+%% @equiv paths(Element, [{element, Name}])
 -spec subelements(exml:element(), binary()) -> [exml:element()].
 subelements(#xmlel{children = Children}, Name) ->
     lists:filter(fun(#xmlel{name = N}) when N =:= Name ->
@@ -197,6 +211,7 @@ subelements(#xmlel{children = Children}, Name) ->
                         false
                  end, Children).
 
+%% @equiv paths(Element, [{element_with_ns, NS}])
 -spec subelements_with_ns(exml:element(), binary()) -> [exml:element()].
 subelements_with_ns(#xmlel{children = Children}, NS) ->
     lists:filter(fun(#xmlel{} = Child) ->
@@ -205,6 +220,7 @@ subelements_with_ns(#xmlel{children = Children}, NS) ->
                         false
                  end, Children).
 
+%% @equiv paths(Element, [{element_with_ns, Name, NS}])
 -spec subelements_with_name_and_ns(exml:element(), binary(), binary()) -> [exml:element()].
 subelements_with_name_and_ns(#xmlel{children = Children}, Name, NS) ->
     lists:filter(fun(#xmlel{name = SubName} = Child) ->
@@ -214,6 +230,7 @@ subelements_with_name_and_ns(#xmlel{children = Children}, Name, NS) ->
                         false
                  end, Children).
 
+%% @equiv paths(Element, [{element_with_attr, AttrName, AttrValue}])
 -spec subelements_with_attr(exml:element(), binary(), binary()) -> [exml:element()].
 subelements_with_attr(#xmlel{children = Children}, AttrName, Value) ->
     lists:filter(fun(#xmlel{} = Child) ->
@@ -222,22 +239,19 @@ subelements_with_attr(#xmlel{children = Children}, AttrName, Value) ->
                         false
                  end, Children).
 
+%% @equiv path(Element, [cdata])
 -spec cdata(exml:element()) -> binary().
 cdata(#xmlel{children = Children}) ->
     list_to_binary([C || #xmlcdata{content = C} <- Children]).
 
-%% @doc Query attribute value by name.
-%% Returns the attribute value associated with `Name' if `Element' contains such attribute.
-%% Otherwise returns `undefined'
+%% @see attr/3
+%% @equiv path(Element, [{attr, Name}])
 -spec attr(exml:element(), binary()) -> binary() | undefined.
 attr(Element, Name) ->
     attr(Element, Name, undefined).
 
-%% @doc Query attribute value by name.
-%% Returns the attribute value associated with `Name' if `Element' contains such attribute.
-%% Otherwise returns `Default'
-%% @see attr/2
--spec attr(exml:element(), binary(), Other) -> binary() | Other.
+%% @equiv path(Element, [{attr, Name}], Default)
+-spec attr(exml:element(), binary(), Default) -> binary() | Default.
 attr(#xmlel{attrs = Attrs}, Name, Default) ->
     case lists:keyfind(Name, 1, Attrs) of
         {Name, Value} ->
