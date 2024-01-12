@@ -26,23 +26,34 @@
                 }).
 
 -type start() :: #xmlstreamstart{}.
+%% `#xmlstreamstart{}' record.
 -type stop() :: #xmlstreamend{}.
--type element() :: exml_nif:stream_element().
+%% `#xmlstreamend{}' record.
 -type parser() :: #parser{}.
-%% infinite_stream - No distinct "stream start" or "stream end", only #xmlel{} will be returned.
-%% max_element_size - Specifies maximum byte size of any parsed XML element.
-%%                    The only exception is the "stream start" element,
-%%                    for which only the size of the opening tag is limited.
+%% `#parser{}' record.
+-type element() :: exml_nif:stream_element().
+%% One of `t:start()', `t:stop()' or `t:exml:element()'.
+
 -type parser_opt() :: {infinite_stream, boolean()} | {max_element_size, non_neg_integer()}.
+%% Parser options
+%%
+%% <ul>
+%%  <li>`infinite_stream': No distinct `t:start()' or `t:stop()', only `#xmlel{}' will be returned.</li>
+%%  <li>`max_element_size': Specifies maximum byte size of any parsed XML element.
+%%      The only exception is the "stream start" element,
+%%      for which only the size of the opening tag is limited.</li>
+%% </ul>
 
 %%%===================================================================
 %%% Public API
 %%%===================================================================
 
+%% @see new_parser/1
 -spec new_parser() -> {ok, parser()} | {error, any()}.
 new_parser() ->
     new_parser([]).
 
+%% @doc Creates a new parser
 -spec new_parser([parser_opt()]) -> {ok, parser()} | {error, any()}.
 new_parser(Opts)->
     MaxElementSize = proplists:get_value(max_element_size, Opts, 0),
@@ -54,8 +65,9 @@ new_parser(Opts)->
             Error
     end.
 
--spec parse(parser(), binary()) -> {ok, parser(), [exml_stream:element()]}
-                                       | {error, Reason :: any()}.
+%% @doc Makes a parser parse input
+-spec parse(parser(), binary()) ->
+    {ok, parser(), [exml_stream:element()]} | {error, Reason :: any()}.
 parse(Parser, Input) when is_binary(Input) ->
     #parser{event_parser = EventParser, buffer = OldBuf} = Parser,
     Buffer = OldBuf ++ [Input],
@@ -66,11 +78,15 @@ parse(Parser, Input) when is_binary(Input) ->
             Other
     end.
 
+%% @doc Resets the parser's buffers
 -spec reset_parser(parser()) -> {ok, parser()}.
 reset_parser(#parser{event_parser = NifParser} = Parser) ->
     exml_nif:reset_parser(NifParser),
     {ok, Parser#parser{buffer = []}}.
 
+%% @doc Free a parser
+%%
+%% Kept for backwards-compatibility, it is a no-op.
 -spec free_parser(parser()) -> ok.
 free_parser(#parser{}) ->
     ok.
