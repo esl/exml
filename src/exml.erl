@@ -111,22 +111,9 @@ parse(XML) ->
 %% The `Pretty' argument indicates if the generated XML should have new lines and indentation,
 %% which is useful for the debugging eye, or should rather be a minified version,
 %% which is better for IO performance.
--spec to_iolist(exml_stream:element() | [exml_stream:element()], prettify()) -> iodata().
+-spec to_iolist(cdata() | exml_stream:element() | [exml_stream:element()], prettify()) -> iodata().
 to_iolist(#xmlel{} = Element, Pretty) ->
     to_binary_nif(Element, Pretty);
-to_iolist([Element], Pretty) ->
-    to_iolist(Element, Pretty);
-to_iolist([Head | _] = Elements, Pretty) ->
-    [Last | RevChildren] = lists:reverse(tl(Elements)),
-    case {Head, Last} of
-        {#xmlstreamstart{name = Name, attrs = Attrs},
-         #xmlstreamend{name = Name}} ->
-            Element = #xmlel{name = Name, attrs = Attrs,
-                             children = lists:reverse(RevChildren)},
-            to_binary_nif(Element, Pretty);
-        _ ->
-            [to_iolist(El, Pretty) || El <- Elements]
-    end;
 to_iolist(#xmlstreamstart{name = Name, attrs = Attrs}, _Pretty) ->
     Result = to_binary_nif(#xmlel{name = Name, attrs = Attrs}, not_pretty),
     FrontSize = byte_size(Result) - 2,
@@ -135,7 +122,21 @@ to_iolist(#xmlstreamstart{name = Name, attrs = Attrs}, _Pretty) ->
 to_iolist(#xmlstreamend{name = Name}, _Pretty) ->
     [<<"</">>, Name, <<">">>];
 to_iolist(#xmlcdata{content = Content}, _Pretty) ->
-    exml_nif:escape_cdata(Content).
+    exml_nif:escape_cdata(Content);
+to_iolist([Element], Pretty) ->
+    to_iolist(Element, Pretty);
+to_iolist([#xmlstreamstart{name = Name, attrs = Attrs} | Tail] = Elements, Pretty) ->
+    [Last | RevChildren] = lists:reverse(Tail),
+    case Last of
+        #xmlstreamend{name = Name} ->
+            %% Add extra nesting for streams so pretty-printing would be indented properly
+            Element = #xmlel{name = Name, attrs = Attrs, children = lists:reverse(RevChildren)},
+            to_binary_nif(Element, Pretty);
+        _ ->
+            [to_iolist(El, Pretty) || El <- Elements]
+    end;
+to_iolist(Elements, Pretty) when is_list(Elements) ->
+    [to_iolist(El, Pretty) || El <- Elements].
 
 -spec to_binary_nif(element(), prettify()) -> binary().
 to_binary_nif(#xmlel{} = Element, Pretty) ->
