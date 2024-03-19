@@ -50,7 +50,8 @@ xml_size(#xmlstreamstart{ name = Name, attrs = Attrs }) ->
     byte_size(Name) + 2 + xml_size(Attrs);
 xml_size(#xmlstreamend{ name = Name }) ->
     byte_size(Name) + 3;
-xml_size({Key, Value}) ->
+xml_size({Key, Value}) when is_binary(Key) ->
+    % Attributes
     byte_size(Key)
     + 4 % ="" and whitespace before
     + byte_size(Value).
@@ -66,7 +67,12 @@ xml_size({Key, Value}) ->
 %% @end
 %% The implementation of this function is a subtle modification of
 %% https://github.com/erszcz/rxml/commit/e8483408663f0bc2af7896e786c1cdea2e86e43d
--spec xml_sort(item() | [item()]) -> item() | [item()].
+-spec xml_sort([item()]) -> [item()];
+              (element()) -> element();
+              (attr()) -> attr();
+              (cdata()) -> cdata();
+              (exml_stream:start()) -> exml_stream:start();
+              (exml_stream:stop()) -> exml_stream:stop().
 xml_sort(#xmlcdata{} = Cdata) ->
     Cdata;
 xml_sort(#xmlel{ attrs = Attrs, children = Children } = El) ->
@@ -130,7 +136,10 @@ to_iolist([#xmlstreamstart{name = Name, attrs = Attrs} | Tail] = Elements, Prett
     case Last of
         #xmlstreamend{name = Name} ->
             %% Add extra nesting for streams so pretty-printing would be indented properly
-            Element = #xmlel{name = Name, attrs = Attrs, children = lists:reverse(RevChildren)},
+            Children = lists:reverse(RevChildren),
+            %% The cast is safe, since we eliminated #xmlstreamstart{} and #xmlstreamend{}.
+            %% The rest are element()s, which are valid children.
+            Element = #xmlel{name = Name, attrs = Attrs, children = eqwalizer:dynamic_cast(Children)},
             to_binary_nif(Element, Pretty);
         _ ->
             [to_iolist(El, Pretty) || El <- Elements]
