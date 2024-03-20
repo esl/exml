@@ -16,7 +16,7 @@
 -compile(export_all).
 
 application_test() ->
-    ?assertEqual(ok, application:start(exml)),
+    ?assertMatch({ok, _}, application:ensure_all_started(exml)),
     ?assertEqual(ok, application:stop(exml)).
 
 size_of_normal_xml_test() ->
