@@ -129,10 +129,10 @@ subelement(Element, Name) ->
 -spec subelement(exml:element(), binary(), Default) -> exml:element() | Default.
 subelement(#xmlel{children = Children}, Name, Default) ->
     case lists:keyfind(Name, #xmlel.name, Children) of
+        #xmlel{} = Result ->
+            Result;
         false ->
-            Default;
-        Result ->
-            Result
+            Default
     end.
 
 %% @equiv path(Element, [{element_with_ns, NS}])
