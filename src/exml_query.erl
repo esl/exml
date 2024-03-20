@@ -161,7 +161,9 @@ child_with_ns([_ | Rest], NS, Default) ->
 -spec subelement_with_attr(exml:element(), AttrName :: binary(), AttrValue :: binary()) ->
     exml:element() | undefined.
 subelement_with_attr(Element, AttrName, AttrValue) ->
-    subelement_with_attr(Element, AttrName, AttrValue, undefined).
+    %% eqwalizer can't tell that Default in subelement_with_attr/4
+    %% in this case WILL be just 'undefined', which is a valid return type from this function.
+    eqwalizer:dynamic_cast(subelement_with_attr(Element, AttrName, AttrValue, undefined)).
 
 %% @equiv path(Element, [{element_with_attr, AttrName, AttrValue}], Default)
 -spec subelement_with_attr(Element, AttrName, AttrValue, Default) -> SubElement | Default when
@@ -209,7 +211,7 @@ subelements(#xmlel{children = Children}, Name) ->
                         true;
                     (_) ->
                         false
-                 end, Children).
+                 end, eqwalizer:dynamic_cast(Children)).
 
 %% @equiv paths(Element, [{element_with_ns, NS}])
 -spec subelements_with_ns(exml:element(), binary()) -> [exml:element()].
@@ -218,7 +220,7 @@ subelements_with_ns(#xmlel{children = Children}, NS) ->
                         NS =:= attr(Child, <<"xmlns">>);
                     (_) ->
                         false
-                 end, Children).
+                 end, eqwalizer:dynamic_cast(Children)).
 
 %% @equiv paths(Element, [{element_with_ns, Name, NS}])
 -spec subelements_with_name_and_ns(exml:element(), binary(), binary()) -> [exml:element()].
@@ -228,7 +230,7 @@ subelements_with_name_and_ns(#xmlel{children = Children}, Name, NS) ->
                          NS =:= attr(Child, <<"xmlns">>);
                     (_) ->
                         false
-                 end, Children).
+                 end, eqwalizer:dynamic_cast(Children)).
 
 %% @equiv paths(Element, [{element_with_attr, AttrName, AttrValue}])
 -spec subelements_with_attr(exml:element(), binary(), binary()) -> [exml:element()].
@@ -237,7 +239,7 @@ subelements_with_attr(#xmlel{children = Children}, AttrName, Value) ->
                         Value =:= attr(Child, AttrName);
                     (_) ->
                         false
-                 end, Children).
+                 end, eqwalizer:dynamic_cast(Children)).
 
 %% @equiv path(Element, [cdata])
 -spec cdata(exml:element()) -> binary().
