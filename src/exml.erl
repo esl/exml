@@ -69,7 +69,6 @@ xml_size({Key, Value}) when is_binary(Key) ->
 %% https://github.com/erszcz/rxml/commit/e8483408663f0bc2af7896e786c1cdea2e86e43d
 -spec xml_sort([item()]) -> [item()];
               (element()) -> element();
-              (attr()) -> attr();
               (cdata()) -> cdata();
               (exml_stream:start()) -> exml_stream:start();
               (exml_stream:stop()) -> exml_stream:stop().
