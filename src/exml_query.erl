@@ -74,7 +74,7 @@ path(Element, Path) ->
 %% '''
 %% will return `<<"Message from bob to alice">>'
 %% @end
--spec path(exml:element(), path(), Default) -> exml:element() | binary() | Default.
+-spec path(exml:element() | undefined, path(), Default) -> exml:element() | binary() | Default.
 path(#xmlel{} = Element, [], _) ->
     Element;
 path(#xmlel{} = Element, [{element, Name} | Rest], Default) ->
