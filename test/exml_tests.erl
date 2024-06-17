@@ -13,7 +13,7 @@
 -include_lib("exml/include/exml.hrl").
 -include_lib("exml/include/exml_stream.hrl").
 
--compile(export_all).
+-compile([export_all, nowarn_export_all]).
 
 application_test() ->
     ?assertEqual(ok, application:start(exml)),
