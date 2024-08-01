@@ -12,7 +12,7 @@ jobs:
     name: OTP ${{matrix.otp_vsn}}
     strategy:
       matrix:
-        otp_vsn: ['26.2', '25.3', '24.3']
+        otp_vsn: ['27.0.1', '26.2', '25.3', '24.3']
         rebar_vsn: ['3.22.0']
     runs-on: 'ubuntu-22.04'
     env:
