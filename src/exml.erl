@@ -37,8 +37,8 @@ xml_size([]) ->
     0;
 xml_size([Elem | Rest]) ->
     xml_size(Elem) + xml_size(Rest);
-xml_size(#xmlcdata{ content = Content }) ->
-    iolist_size(exml_nif:escape_cdata(Content));
+xml_size(#xmlcdata{content = Content, style = Style}) ->
+    iolist_size(exml_nif:escape_cdata(Content, Style));
 xml_size(#xmlel{ name = Name, attrs = Attrs, children = [] }) ->
     3 % Self-closing: </>
     + byte_size(Name) + xml_size(Attrs);
@@ -129,8 +129,8 @@ to_iolist(#xmlstreamstart{name = Name, attrs = Attrs}, _Pretty) ->
     [Front, $>];
 to_iolist(#xmlstreamend{name = Name}, _Pretty) ->
     [<<"</">>, Name, <<">">>];
-to_iolist(#xmlcdata{content = Content}, _Pretty) ->
-    exml_nif:escape_cdata(Content);
+to_iolist(#xmlcdata{content = Content, style = Style}, _Pretty) ->
+    exml_nif:escape_cdata(Content, Style);
 to_iolist([Element], Pretty) ->
     to_iolist(Element, Pretty);
 to_iolist([#xmlstreamstart{name = Name, attrs = Attrs} | Tail] = Elements, Pretty) ->

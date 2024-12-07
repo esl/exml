@@ -302,7 +302,15 @@ bool build_cdata(ErlNifEnv *env, xml_document &doc, const ERL_NIF_TERM elem[],
   if (!enif_inspect_iolist_as_binary(env, elem[1], &bin))
     return false;
 
-  auto child = doc.impl.allocate_node(rapidxml::node_data);
+  rapidxml::node_type cdata_type;
+  if (enif_compare(atom_escaped, elem[2]) == 0)
+    cdata_type = rapidxml::node_data;
+  else if (enif_compare(atom_cdata, elem[2]) == 0)
+    cdata_type = rapidxml::node_cdata;
+  else
+    return false;
+
+  auto child = doc.impl.allocate_node(cdata_type);
   child->value(bin.size > 0 ? bin.data : EMPTY, bin.size);
   node.append_node(child);
   return true;
@@ -613,7 +621,15 @@ static ERL_NIF_TERM escape_cdata(ErlNifEnv *env, int argc,
   if (!enif_inspect_iolist_as_binary(env, argv[0], &bin))
     return enif_make_badarg(env);
 
-  rapidxml::xml_node<unsigned char> node(rapidxml::node_data);
+  rapidxml::node_type cdata_type;
+  if (enif_compare(atom_escaped, argv[1]) == 0)
+    cdata_type = rapidxml::node_data;
+  else if (enif_compare(atom_cdata, argv[1]) == 0)
+    cdata_type = rapidxml::node_cdata;
+  else
+    return enif_make_badarg(env);
+
+  rapidxml::xml_node<unsigned char> node(cdata_type);
   node.value(bin.data, bin.size);
   return node_to_binary(env, node, rapidxml::print_no_indenting);
 }
@@ -652,7 +668,7 @@ static ERL_NIF_TERM reset_parser(ErlNifEnv *env, int argc,
 
 static ErlNifFunc nif_funcs[] = {
     {"create", 2, create},         {"parse", 1, parse},
-    {"parse_next", 2, parse_next}, {"escape_cdata", 1, escape_cdata},
+    {"parse_next", 2, parse_next}, {"escape_cdata", 2, escape_cdata},
     {"to_binary", 2, to_binary},   {"reset_parser", 1, reset_parser}};
 }
 

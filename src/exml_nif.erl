@@ -5,12 +5,12 @@
 
 -module(exml_nif).
 
--nifs([create/2, escape_cdata/1, to_binary/2, parse/1, parse_next/2, reset_parser/1]).
+-nifs([create/2, escape_cdata/2, to_binary/2, parse/1, parse_next/2, reset_parser/1]).
 
 -type parser() :: term().
 -type stream_element() :: exml:element() | exml_stream:start() | exml_stream:stop().
 
--export([create/2, parse/1, parse_next/2, escape_cdata/1,
+-export([create/2, parse/1, parse_next/2, escape_cdata/2,
          to_binary/2, reset_parser/1]).
 -export_type([parser/0, stream_element/0]).
 
@@ -44,8 +44,8 @@ load() ->
 create(_, _) ->
     erlang:nif_error(not_loaded).
 
--spec escape_cdata(Bin :: iodata()) -> binary().
-escape_cdata(_Bin) ->
+-spec escape_cdata(Bin :: iodata(), atom()) -> binary().
+escape_cdata(_Bin, _Style) ->
      erlang:nif_error(not_loaded).
 
 -spec to_binary(Elem :: exml:element(), pretty | not_pretty) -> binary().
