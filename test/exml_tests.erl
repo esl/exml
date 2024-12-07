@@ -107,7 +107,7 @@ assert_xmlel_equal_macro_positive_test() ->
              children = [#xmlcdata{ content = <<"some value">> }]
             },
     El2 = El1#xmlel{ attrs = lists:reverse(Attrs) },
-    ?assertEqual(ok, ?exmlAssertEqual(El1, El2)).
+    ?exmlAssertEqual(El1, El2).
 
 assert_xmlel_equal_macro_negative_test() ->
     El1 = #xmlel{
