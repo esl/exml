@@ -84,6 +84,8 @@ xml_sort(#xmlstreamstart{ attrs = Attrs } = StreamStart) ->
     StreamStart#xmlstreamstart{ attrs = lists:sort(Attrs) };
 xml_sort(#xmlstreamend{} = StreamEnd) ->
     StreamEnd;
+xml_sort({Key, Value}) ->
+    {Key, Value};
 xml_sort(Elements) when is_list(Elements) ->
     lists:sort([ xml_sort(E) || E <- Elements ]).
 
