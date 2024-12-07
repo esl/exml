@@ -147,13 +147,6 @@ ERL_NIF_TERM to_subbinary(ParseCtx &ctx, const unsigned char *text,
   return binary;
 }
 
-ERL_NIF_TERM make_attr_tuple(ParseCtx &ctx,
-                             rapidxml::xml_attribute<unsigned char> *attr) {
-  ERL_NIF_TERM name = to_subbinary(ctx, attr->name(), attr->name_size());
-  ERL_NIF_TERM value = to_subbinary(ctx, attr->value(), attr->value_size());
-  return enif_make_tuple2(ctx.env, name, value);
-}
-
 ERL_NIF_TERM get_xmlcdata(ParseCtx &ctx,
                           rapidxml::xml_node<unsigned char> *node) {
   return enif_make_tuple3(ctx.env, atom_xmlcdata,
@@ -248,9 +241,14 @@ ERL_NIF_TERM make_node_name_binary(ParseCtx &ctx,
   return to_subbinary(ctx, start, len);
 }
 
-std::tuple<ERL_NIF_TERM, ERL_NIF_TERM>
-get_open_tag(ParseCtx &ctx, rapidxml::xml_node<unsigned char> *node) {
-  ERL_NIF_TERM name_term = make_node_name_binary(ctx, node);
+ERL_NIF_TERM make_attr_tuple(ParseCtx &ctx,
+                             rapidxml::xml_attribute<unsigned char> *attr) {
+  ERL_NIF_TERM name = to_subbinary(ctx, attr->name(), attr->name_size());
+  ERL_NIF_TERM value = to_subbinary(ctx, attr->value(), attr->value_size());
+  return enif_make_tuple2(ctx.env, name, value);
+}
+
+ERL_NIF_TERM get_attributes(ParseCtx &ctx, rapidxml::xml_node<unsigned char> *node) {
   std::vector<ERL_NIF_TERM> &attrs = Parser::term_buffer;
   std::size_t begin = attrs.size();
 
@@ -265,14 +263,15 @@ get_open_tag(ParseCtx &ctx, rapidxml::xml_node<unsigned char> *node) {
           : enif_make_list_from_array(ctx.env, attrs.data() + begin, size);
 
   attrs.erase(attrs.end() - size, attrs.end());
-  return std::make_tuple(name_term, attrs_term);
+  return attrs_term;
 }
 
 ERL_NIF_TERM make_stream_start_tuple(ParseCtx &ctx,
                                      rapidxml::xml_node<unsigned char> *node) {
-  auto name_and_attrs = get_open_tag(ctx, node);
-  return enif_make_tuple3(ctx.env, atom_xmlstreamstart, std::get<0>(name_and_attrs),
-                          std::get<1>(name_and_attrs));
+
+  ERL_NIF_TERM name_term = make_node_name_binary(ctx, node);
+  ERL_NIF_TERM attrs_term = get_attributes(ctx, node);
+  return enif_make_tuple3(ctx.env, atom_xmlstreamstart, name_term, attrs_term);
 }
 
 ERL_NIF_TERM make_stream_end_tuple(ParseCtx &ctx) {
@@ -287,10 +286,10 @@ ERL_NIF_TERM make_stream_end_tuple(ParseCtx &ctx) {
 
 ERL_NIF_TERM make_xmlel(ParseCtx &ctx,
                         rapidxml::xml_node<unsigned char> *node) {
-  auto name_and_attrs = get_open_tag(ctx, node);
+  ERL_NIF_TERM name_term = make_node_name_binary(ctx, node);
+  ERL_NIF_TERM attrs_term = get_attributes(ctx, node);
   ERL_NIF_TERM children_term = get_children_tuple(ctx, node);
-  return enif_make_tuple4(ctx.env, atom_xmlel, std::get<0>(name_and_attrs),
-                          std::get<1>(name_and_attrs), children_term);
+  return enif_make_tuple4(ctx.env, atom_xmlel, name_term, attrs_term, children_term);
 }
 
 bool build_children(ErlNifEnv *env, xml_document &doc, ERL_NIF_TERM children,
