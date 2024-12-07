@@ -68,6 +68,8 @@ namespace {
   ERL_NIF_TERM atom_xmlstreamstart;
   ERL_NIF_TERM atom_xmlstreamend;
   ERL_NIF_TERM atom_pretty;
+  ERL_NIF_TERM atom_escaped;
+  ERL_NIF_TERM atom_cdata;
   ERL_NIF_TERM atom_true;
   constexpr const unsigned char EMPTY[1] = {0};
 
@@ -154,8 +156,9 @@ ERL_NIF_TERM make_attr_tuple(ParseCtx &ctx,
 
 ERL_NIF_TERM get_xmlcdata(ParseCtx &ctx,
                           rapidxml::xml_node<unsigned char> *node) {
-  return enif_make_tuple2(ctx.env, atom_xmlcdata,
-                          to_subbinary(ctx, node->value(), node->value_size()));
+  return enif_make_tuple3(ctx.env, atom_xmlcdata,
+                          to_subbinary(ctx, node->value(), node->value_size()),
+                          atom_escaped);
 }
 
 ERL_NIF_TERM merge_data_nodes(ParseCtx &ctx,
@@ -170,7 +173,7 @@ ERL_NIF_TERM merge_data_nodes(ParseCtx &ctx,
     node = node->next_sibling();
   }
 
-  return enif_make_tuple2(ctx.env, atom_xmlcdata, bin);
+  return enif_make_tuple3(ctx.env, atom_xmlcdata, bin, atom_escaped);
 }
 
 void append_pending_data_nodes(ParseCtx &ctx,
@@ -358,7 +361,7 @@ bool build_child(ErlNifEnv *env, xml_document &doc, ERL_NIF_TERM child,
   if (!enif_get_tuple(env, child, &arity, &tuple))
     return false;
 
-  if (arity == 2 && enif_compare(atom_xmlcdata, tuple[0]) == 0) {
+  if (arity == 3 && enif_compare(atom_xmlcdata, tuple[0]) == 0) {
     if (!build_cdata(env, doc, tuple, node))
       return false;
   } else if (arity == 4 && enif_compare(atom_xmlel, tuple[0]) == 0) {
@@ -443,6 +446,8 @@ static int load(ErlNifEnv *env, void **priv_data, ERL_NIF_TERM load_info) {
   atom_xmlstreamstart = enif_make_atom(env, "xmlstreamstart");
   atom_xmlstreamend = enif_make_atom(env, "xmlstreamend");
   atom_pretty = enif_make_atom(env, "pretty");
+  atom_escaped = enif_make_atom(env, "escaped");
+  atom_cdata = enif_make_atom(env, "cdata");
   atom_true = enif_make_atom(env, "true");
 
   get_static_doc().impl.set_allocator(enif_alloc, enif_free);
