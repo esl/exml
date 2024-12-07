@@ -57,6 +57,66 @@ sort_xmlel_attributes_test() ->
     ToOrder = [{<<"attr2">>, <<"bar">>}, {<<"attr1">>, <<"foo">>}],
     ?assertEqual(Attrs, exml:xml_sort(ToOrder)).
 
+remove_cdata_test() ->
+    Attrs = [{<<"attr1">>, <<"foo">>}, {<<"attr2">>, <<"bar">>}],
+    Child1 = #xmlel{name = <<"el1">>, attrs = Attrs},
+    Child2 = #xmlel{name = <<"el2">>, attrs = Attrs},
+    CData = #xmlcdata{content = <<"some value">>},
+    El = #xmlel{name = <<"foo">>, children = [Child1, CData, Child2]},
+    Expected = #xmlel{name = <<"foo">>, children = [Child1, Child2]},
+    ?exmlAssertEqual(Expected, exml:remove_cdata(El)).
+
+filter_children_test() ->
+    Attrs = [{<<"attr1">>, <<"foo">>}, {<<"attr2">>, <<"bar">>}],
+    Child1 = #xmlel{name = <<"el1">>, attrs = [{<<"xmlns">>, <<"foo">>}]},
+    Child2 = #xmlel{name = <<"el2">>, attrs = [{<<"xmlns">>, <<"bar">>} | Attrs]},
+    Child3 = #xmlel{name = <<"el3">>, attrs = [{<<"xmlns">>, <<"baz">>} | Attrs]},
+    El = #xmlel{name = <<"foo">>, children = [Child1, Child2, Child3]},
+    Expected = #xmlel{name = <<"foo">>, children = [Child1, Child3]},
+    Pred = fun(Child) -> <<"bar">> =/= exml_query:attr(Child, <<"xmlns">>) end,
+    ?exmlAssertEqual(Expected, exml:filter_children(El, Pred)).
+
+append_children_test() ->
+    Attrs = [{<<"attr1">>, <<"foo">>}, {<<"attr2">>, <<"bar">>}],
+    Child1 = #xmlel{name = <<"el1">>, attrs = Attrs},
+    Child2 = #xmlel{name = <<"el2">>, attrs = Attrs},
+    CData = #xmlcdata{content = <<"some value">>},
+    El = #xmlel{name = <<"foo">>, children = [Child1]},
+    Expected = #xmlel{name = <<"foo">>, children = [Child1, Child2, CData]},
+    ?exmlAssertEqual(Expected, exml:append_children(El, [Child2, CData])).
+
+replace_attribute_value_test() ->
+    Attrs1 = [{<<"attr1">>, <<"foo">>}, {<<"attr2">>, <<"bar">>}],
+    Attrs2 = [{<<"attr1">>, <<"foo">>}, {<<"attr2">>, <<"baz">>}],
+    El = #xmlel{name = <<"foo">>, attrs = Attrs1},
+    Expected = #xmlel{name = <<"foo">>, attrs = Attrs2},
+    ?exmlAssertEqual(Expected, exml:upsert_attr_value(El, <<"attr2">>, <<"baz">>)).
+
+remove_attribute_test() ->
+    Attrs1 = [{<<"attr1">>, <<"foo">>}, {<<"attr2">>, <<"bar">>}],
+    Attrs2 = [{<<"attr2">>, <<"bar">>}],
+    El = #xmlel{name = <<"foo">>, attrs = Attrs1},
+    Expected = #xmlel{name = <<"foo">>, attrs = Attrs2},
+    ?exmlAssertEqual(Expected, exml:remove_attr(El, <<"attr1">>)).
+
+replace_child_test() ->
+    Attrs = [{<<"attr1">>, <<"foo">>}, {<<"attr2">>, <<"bar">>}],
+    Child1 = #xmlel{name = <<"el">>},
+    Child2 = #xmlel{name = <<"el">>, attrs = Attrs},
+    Child3 = #xmlel{name = <<"last">>, attrs = Attrs, children = [Child1]},
+    El = #xmlel{name = <<"foo">>, children = [Child1, Child3]},
+    Expected = #xmlel{name = <<"foo">>, children = [Child2, Child3]},
+    ?exmlAssertEqual(Expected, exml:upsert_child(El, Child2)).
+
+insert_new_child_test() ->
+    Attrs = [{<<"attr1">>, <<"foo">>}, {<<"attr2">>, <<"bar">>}],
+    Child1 = #xmlel{name = <<"el">>},
+    Child2 = #xmlel{name = <<"el">>, attrs = Attrs},
+    Child3 = #xmlel{name = <<"last">>, attrs = Attrs, children = [Child1]},
+    El = #xmlel{name = <<"foo">>, children = [Child1, Child3]},
+    Expected = #xmlel{name = <<"foo">>, children = [Child1, Child3]},
+    ?exmlAssertEqual(Expected, exml:insert_new_child(El, Child2)).
+
 sort_xmlel_test() ->
     Attrs = [{<<"attr1">>, <<"bar">>}, {<<"attr2">>, <<"baz">>}],
     El1 = #xmlel{
