@@ -336,7 +336,7 @@ bool build_attrs(ErlNifEnv *env, xml_document &doc, ERL_NIF_TERM attrs,
 bool build_el(ErlNifEnv *env, xml_document &doc, const ERL_NIF_TERM elem[],
               rapidxml::xml_node<unsigned char> &node) {
   ErlNifBinary name;
-  if (!enif_inspect_iolist_as_binary(env, elem[1], &name))
+  if (!enif_inspect_binary(env, elem[1], &name))
     return false;
 
   auto child = doc.impl.allocate_node(rapidxml::node_element);
