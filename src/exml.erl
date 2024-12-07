@@ -110,7 +110,7 @@ to_pretty_iolist(Element) ->
     to_iolist(Element, pretty).
 
 %% @doc Parses a binary or a list of binaries into an XML `t:element()'.
--spec parse(binary() | [binary()]) -> {ok, exml:element()} | {error, any()}.
+-spec parse(binary() | [binary()]) -> {ok, element()} | {error, any()}.
 parse(XML) ->
     exml_nif:parse(XML).
 
