@@ -132,8 +132,8 @@ element_with_name_and_ns_query_test() ->
                                                <<"urn:xmpp:chat-markers:0">>}])).
 
 element_with_name_and_ns_two_names_only_one_ns_query_test() ->
-    Elem1 = #xmlel{name = <<"a">>, attrs = [{<<"xmlns">>, <<"ns1">>}]},
-    Elem2 = #xmlel{name = <<"a">>, attrs = [{<<"xmlns">>, <<"ns2">>}]},
+    Elem1 = #xmlel{name = <<"a">>, attrs = #{<<"xmlns">> => <<"ns1">>}},
+    Elem2 = #xmlel{name = <<"a">>, attrs = #{<<"xmlns">> => <<"ns2">>}},
     Xml = #xmlel{name = <<"element">>, children = [Elem1, Elem2]},
     ?assertEqual(Elem2, exml_query:subelement_with_name_and_ns(Xml, <<"a">>, <<"ns2">>)),
     ?assertEqual(Elem2, exml_query:path(Xml, [{element_with_ns, <<"a">>, <<"ns2">>}])).

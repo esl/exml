@@ -29,11 +29,13 @@
          xml_sort/1]).
 
 -export_type([attr/0,
+              attrs/0,
               cdata/0,
               element/0,
               item/0]).
 
 -type attr() :: {binary(), binary()}.
+-type attrs() :: #{binary() => binary()}.
 -type cdata() :: #xmlcdata{}.
 %% CDATA record. Printing escaping rules defaults to escaping character-wise.
 %%
@@ -57,13 +59,13 @@ xml_size(#xmlcdata{content = Content, style = Style}) ->
     iolist_size(exml_nif:escape_cdata(Content, Style));
 xml_size(#xmlel{ name = Name, attrs = Attrs, children = [] }) ->
     3 % Self-closing: </>
-    + byte_size(Name) + xml_size(Attrs);
+    + byte_size(Name) + xml_size(maps:to_list(Attrs));
 xml_size(#xmlel{ name = Name, attrs = Attrs, children = Children }) ->
     % Opening and closing: <></>
     5 + byte_size(Name)*2
-    + xml_size(Attrs) + xml_size(Children);
+    + xml_size(maps:to_list(Attrs)) + xml_size(Children);
 xml_size(#xmlstreamstart{ name = Name, attrs = Attrs }) ->
-    byte_size(Name) + 2 + xml_size(Attrs);
+    byte_size(Name) + 2 + xml_size(maps:to_list(Attrs));
 xml_size(#xmlstreamend{ name = Name }) ->
     byte_size(Name) + 3;
 xml_size({Key, Value}) when is_binary(Key) ->
@@ -91,13 +93,12 @@ xml_size({Key, Value}) when is_binary(Key) ->
               (exml_stream:stop()) -> exml_stream:stop().
 xml_sort(#xmlcdata{} = Cdata) ->
     Cdata;
-xml_sort(#xmlel{ attrs = Attrs, children = Children } = El) ->
+xml_sort(#xmlel{children = Children} = El) ->
     El#xmlel{
-      attrs = lists:sort(Attrs),
       children = [ xml_sort(C) || C <- Children ]
      };
-xml_sort(#xmlstreamstart{ attrs = Attrs } = StreamStart) ->
-    StreamStart#xmlstreamstart{ attrs = lists:sort(Attrs) };
+xml_sort(#xmlstreamstart{} = StreamStart) ->
+    StreamStart;
 xml_sort(#xmlstreamend{} = StreamEnd) ->
     StreamEnd;
 xml_sort({Key, Value}) ->
@@ -121,8 +122,7 @@ remove_cdata(#xmlel{children = Children} = El) ->
 %% @doc Remove a given attribute from a `t:element/0'.
 -spec remove_attr(exml:element(), binary()) -> element().
 remove_attr(#xmlel{attrs = Attrs} = El, Key) ->
-    NewAttrs = lists:keydelete(Key, 1, Attrs),
-    El#xmlel{attrs = NewAttrs}.
+    El#xmlel{attrs = maps:remove(Key, Attrs)}.
 
 %% @doc Append new children elements to a `t:element/0'.
 -spec append_children(element(), [element() | cdata()]) -> element().
@@ -132,9 +132,7 @@ append_children(#xmlel{children = Children} = El, ExtraChildren) ->
 %% @doc Replace or insert the value of a given attribute.
 -spec upsert_attr_value(element(), binary(), binary()) -> element().
 upsert_attr_value(#xmlel{attrs = Attrs} = El, Key, Value) ->
-    Attrs1 = lists:keydelete(Key, 1, Attrs),
-    Attrs2 = [{Key, Value} | Attrs1],
-    El#xmlel{attrs = Attrs2}.
+    El#xmlel{attrs = Attrs#{Key => Value}}.
 
 %% @doc Replace or insert a child by the given one.
 -spec upsert_child(element(), element()) -> element().

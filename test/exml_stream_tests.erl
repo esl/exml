@@ -14,14 +14,14 @@ basic_parse_test() ->
         exml_stream:parse(Parser1, <<" to='i.am.banana.com' xml:lang='en'><auth">>),
     ?assertEqual(
        [#xmlstreamstart{name = <<"stream:stream">>,
-                        attrs = [{<<"xmlns:stream">>, <<"http://etherx.jabber.org/streams">>},
-                                 {<<"version">>, <<"1.0">>},
-                                 {<<"to">>, <<"i.am.banana.com">>},
-                                 {<<"xml:lang">>, <<"en">>}]}],
+                        attrs = #{<<"xmlns:stream">> => <<"http://etherx.jabber.org/streams">>,
+                                  <<"version">> => <<"1.0">>,
+                                  <<"to">> => <<"i.am.banana.com">>,
+                                  <<"xml:lang">> => <<"en">>}}],
        StreamStart),
     {ok, Parser3, Auth} = exml_stream:parse(Parser2, <<" mechanism='DIGEST-MD5'/>">>),
     ?assertEqual(
-       [#xmlel{name = <<"auth">>, attrs = [{<<"mechanism">>, <<"DIGEST-MD5">>}]}],
+       [#xmlel{name = <<"auth">>, attrs = #{<<"mechanism">> => <<"DIGEST-MD5">>}}],
        Auth),
     {ok, Parser4, Empty1} = exml_stream:parse(Parser3, <<"<stream:features><bind xmlns='some_ns'">>),
     ?assertEqual([], Empty1),
@@ -31,9 +31,9 @@ basic_parse_test() ->
     ?assertMatch(
        [#xmlel{name = <<"stream:features">>,
                     children = [#xmlel{name = <<"bind">>,
-                                            attrs = [{<<"xmlns">>, <<"some_ns">>}]},
+                                            attrs = #{<<"xmlns">> := <<"some_ns">>}},
                                 #xmlel{name = <<"session">>,
-                                            attrs = [{<<"xmlns">>, <<"some_other">>}]},
+                                            attrs = #{<<"xmlns">> := <<"some_other">>}},
                                 _CData]}],
        Features),
     [#xmlel{children=[_, _, CData]}] = Features,
@@ -49,9 +49,9 @@ parser_errors_test() ->
 -define(BANANA_STREAM, <<"<stream:stream xmlns:stream='something'><foo attr='bar'>I am a banana!<baz/></foo></stream:stream>">>).
 -define(assertIsBanana(Elements), (fun() -> % fun instead of begin/end because we bind CData in unhygenic macro
                                            ?assertMatch([#xmlstreamstart{name = <<"stream:stream">>,
-                                                                         attrs = [{<<"xmlns:stream">>, <<"something">>}]},
+                                                                         attrs = #{<<"xmlns:stream">> := <<"something">>}},
                                                          #xmlel{name = <<"foo">>,
-                                                                     attrs = [{<<"attr">>, <<"bar">>}],
+                                                                     attrs = #{<<"attr">> := <<"bar">>},
                                                                      children = [_CData, #xmlel{name = <<"baz">>}]},
                                                          #xmlstreamend{name = <<"stream:stream">>}],
                                                         Elements),
@@ -84,12 +84,12 @@ infinit_framed_stream_test() ->
     {ok, Parser0} = exml_stream:new_parser([{infinite_stream, true},
                                             {autoreset, true}]),
     Els = [#xmlel{name = <<"open">>,
-                  attrs = [{<<"xmlns">>, <<"urn:ietf:params:xml:ns:xmpp-framing">>},
-                           {<<"to">>, <<"example.com">>},
-                           {<<"version">>, <<"1.0">>}]},
+                  attrs = #{<<"xmlns">> => <<"urn:ietf:params:xml:ns:xmpp-framing">>,
+                            <<"to">> => <<"example.com">>,
+                            <<"version">> => <<"1.0">>}},
            #xmlel{name = <<"foo">>},
            #xmlel{name = <<"message">>,
-                  attrs = [{<<"to">>, <<"ala@example.com">>}],
+                  attrs = #{<<"to">> => <<"ala@example.com">>},
                   children = [#xmlel{name = <<"body">>,
                                      children = [#xmlcdata{content = <<"Hi, How Are You?">>}]}]}
     ],
@@ -147,7 +147,7 @@ conv_attr_test() ->
     AssertParses = fun(Input) ->
                            {ok, Parser0} = exml_stream:new_parser(),
                            {ok, _Parser1, Elements} = exml_stream:parse(Parser0, Input),
-                           ?assertMatch([_, #xmlel{attrs = [{<<"attr">>, <<"&<>\"'\n\t\r">>}]} | _],
+                           ?assertMatch([_, #xmlel{attrs = #{<<"attr">> := <<"&<>\"'\n\t\r">>}} | _],
                                                    Elements),
                            Elements
                    end,
@@ -233,18 +233,18 @@ infinite_stream_partial_chunk_test() ->
     {ok, Parser1, Open} = exml_stream:parse(Parser0, <<"<open xmlns='urn:ietf:params:xml:ns:xmpp-framing' to='i.am.banana.com' version='1.0'/>">>),
     ?assertEqual(
        [#xmlel{name = <<"open">>,
-               attrs = [{<<"xmlns">>, <<"urn:ietf:params:xml:ns:xmpp-framing">>},
-                        {<<"to">>, <<"i.am.banana.com">>},
-                        {<<"version">>, <<"1.0">>}]}],
+               attrs = #{<<"xmlns">> => <<"urn:ietf:params:xml:ns:xmpp-framing">>,
+                         <<"to">> => <<"i.am.banana.com">>,
+                         <<"version">> => <<"1.0">>}}],
        Open),
     {ok, Parser2, A} = exml_stream:parse(Parser1, <<"<a></a>">>),
-    ?assertEqual([#xmlel{name = <<"a">>, attrs = []}], A),
+    ?assertEqual([#xmlel{name = <<"a">>, attrs = #{}}], A),
     {ok, Parser3, Empty0} = exml_stream:parse(Parser2, <<" ">>),
     ?assertEqual([], Empty0),
     {ok, Parser4, Empty1} = exml_stream:parse(Parser3, <<"<b></b">>),
     ?assertEqual([], Empty1),
     {ok, _Parser5, B} = exml_stream:parse(Parser4, <<">">>),
-    ?assertEqual([#xmlel{name = <<"b">>, attrs = []}], B).
+    ?assertEqual([#xmlel{name = <<"b">>, attrs = #{}}], B).
 
 null_character_test() ->
     {ok, P1} = exml_stream:new_parser(),

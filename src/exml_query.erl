@@ -116,7 +116,7 @@ paths(#xmlel{} = Element, [{element_with_attr, AttrName, Value} | Rest]) ->
 paths(#xmlel{} = Element, [cdata]) ->
     [cdata(Element)];
 paths(#xmlel{attrs = Attrs}, [{attr, Name}]) ->
-    lists:sublist([V || {N, V} <- Attrs, N =:= Name], 1);
+    lists:sublist([V || {N, V} <- maps:to_list(Attrs), N =:= Name], 1);
 paths(#xmlel{} = El, Path) when is_list(Path) ->
     erlang:error(invalid_path, [El, Path]).
 
@@ -253,9 +253,9 @@ attr(Element, Name) ->
 %% @equiv path(Element, [{attr, Name}], Default)
 -spec attr(exml:element(), binary(), Default) -> binary() | Default.
 attr(#xmlel{attrs = Attrs}, Name, Default) ->
-    case lists:keyfind(Name, 1, Attrs) of
-        {Name, Value} ->
+    case maps:find(Name, Attrs) of
+        {ok, Value} ->
             Value;
-        false ->
+        error ->
             Default
     end.
