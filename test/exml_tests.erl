@@ -13,7 +13,7 @@
 -include_lib("exml/include/exml.hrl").
 -include_lib("exml/include/exml_stream.hrl").
 
--compile(export_all).
+-compile([export_all, nowarn_export_all]).
 
 application_test() ->
     ?assertEqual(ok, application:start(exml)),
@@ -39,6 +39,11 @@ sort_xmlel_identity_test() ->
             children = [#xmlcdata{ content = <<"some value">> }]
            },
     ?assertEqual(El, exml:xml_sort(El)).
+
+sort_xmlel_attributes_test() ->
+    Attrs = [{<<"attr1">>, <<"foo">>}, {<<"attr2">>, <<"bar">>}],
+    ToOrder = [{<<"attr2">>, <<"bar">>}, {<<"attr1">>, <<"foo">>}],
+    ?assertEqual(Attrs, exml:xml_sort(ToOrder)).
 
 sort_xmlel_test() ->
     Attrs = [{<<"attr1">>, <<"bar">>}, {<<"attr2">>, <<"baz">>}],
@@ -107,7 +112,7 @@ assert_xmlel_equal_macro_positive_test() ->
              children = [#xmlcdata{ content = <<"some value">> }]
             },
     El2 = El1#xmlel{ attrs = lists:reverse(Attrs) },
-    ?assertEqual(ok, ?exmlAssertEqual(El1, El2)).
+    ?exmlAssertEqual(El1, El2).
 
 assert_xmlel_equal_macro_negative_test() ->
     El1 = #xmlel{

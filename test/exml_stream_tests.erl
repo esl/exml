@@ -3,7 +3,7 @@
 -include("exml_stream.hrl").
 -include_lib("eunit/include/eunit.hrl").
 
--compile(export_all).
+-compile([export_all, nowarn_export_all]).
 
 basic_parse_test() ->
     {ok, Parser0} = exml_stream:new_parser(),

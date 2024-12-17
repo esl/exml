@@ -2,8 +2,8 @@
 
 -include_lib("proper/include/proper.hrl").
 -include_lib("eunit/include/eunit.hrl").
--include_lib("exml.hrl").
--compile(export_all).
+
+-compile([export_all, nowarn_export_all]).
 
 p(Name, Property) ->
     ?assert(proper:quickcheck

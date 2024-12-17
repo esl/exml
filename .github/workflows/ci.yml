@@ -12,9 +12,9 @@ jobs:
     name: OTP ${{matrix.otp_vsn}}
     strategy:
       matrix:
-        otp_vsn: ['26.2', '25.3', '24.3']
-        rebar_vsn: ['3.22.0']
-    runs-on: 'ubuntu-22.04'
+        otp_vsn: ['27', '26', '25']
+        rebar_vsn: ['3.24.0']
+    runs-on: 'ubuntu-24.04'
     env:
       OTPVER: ${{ matrix.otp }}
     steps:
@@ -23,7 +23,7 @@ jobs:
         with:
           otp-version: ${{ matrix.otp_vsn }}
           rebar3-version: ${{ matrix.rebar_vsn }}
-      - uses: actions/cache@v3
+      - uses: actions/cache@v4
         name: Cache
         with:
           path: _build
@@ -34,8 +34,9 @@ jobs:
       - run: rebar3 dialyzer
       - run: rebar3 as test codecov analyze
       - run: gcov -o c_src exml
-      - uses: codecov/codecov-action@v3
+      - uses: codecov/codecov-action@v5
         with:
           name: Upload coverage reports to Codecov
           token: ${{ secrets.CODECOV_TOKEN }}
           fail_ci_if_error: true
+          verbose: true

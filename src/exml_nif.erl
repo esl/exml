@@ -25,9 +25,15 @@
 load() ->
     PrivDir = case code:priv_dir(?MODULE) of
                   {error, _} ->
-                      EbinDir = filename:dirname(code:which(?MODULE)),
-                      AppPath = filename:dirname(EbinDir),
-                      filename:join(AppPath, "priv");
+                      case code:which(?MODULE) of
+                          Path when is_list(Path) ->
+                              EbinDir = filename:dirname(Path),
+                              AppPath = filename:dirname(EbinDir),
+                              filename:join(AppPath, "priv");
+                          _ ->
+                              %% cover_compiled | preloaded | non_existing
+                              erlang:error({cannot_get_load_path, ?MODULE})
+                      end;
                   Path ->
                       Path
               end,
