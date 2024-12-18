@@ -27,9 +27,17 @@
 
 -type attr() :: {binary(), binary()}.
 -type cdata() :: #xmlcdata{}.
+%% CDATA record. Printing escaping rules defaults to escaping character-wise.
+%%
+%% Escaping rules:
+%% <ul>
+%%   <li>`escaped': escapes all characters by regular `&' control escaping.</li>
+%%   <li>`cdata': wraps the entire string into a `<![CDATA[]]>' section.</li>
+%% </ul>
 -type element() :: #xmlel{}.
 -type item() :: element() | attr() | cdata() | exml_stream:start() | exml_stream:stop().
 -type prettify() :: pretty | not_pretty.
+%% Printing indentation rule, see `to_iolist/2'.
 
 %% @doc Calculate the length of the original XML payload
 -spec xml_size(item() | [item()]) -> non_neg_integer().
@@ -56,7 +64,7 @@ xml_size({Key, Value}) when is_binary(Key) ->
     + 4 % ="" and whitespace before
     + byte_size(Value).
 
-%% @doc Sort in ascending order a list of xml `t:item()'.
+%% @doc Sort in ascending order a list of xml `t:item/0'.
 %%
 %% Sorting is defined as calling `lists:sort/1' at:
 %% <ul>
@@ -109,7 +117,7 @@ to_iolist(Element) ->
 to_pretty_iolist(Element) ->
     to_iolist(Element, pretty).
 
-%% @doc Parses a binary or a list of binaries into an XML `t:element()'.
+%% @doc Parses a binary or a list of binaries into an XML `t:element/0'.
 -spec parse(binary() | [binary()]) -> {ok, element()} | {error, any()}.
 parse(XML) ->
     exml_nif:parse(XML).

@@ -21,7 +21,7 @@
               parser_opt/0]).
 
 -record(parser, {
-                 event_parser :: exml_nif:parser(),
+                 event_parser :: term(),
                  buffer :: [binary()]
                 }).
 
@@ -30,15 +30,15 @@
 -type stop() :: #xmlstreamend{}.
 %% `#xmlstreamend{}' record.
 -type parser() :: #parser{}.
-%% `#parser{}' record.
--type element() :: exml_nif:stream_element().
-%% One of `t:start()', `t:stop()' or `t:exml:element()'.
+%% `#parser{}' record. Keeps track of unparsed buffers.
+-type element() :: exml:element() | exml_stream:start() | exml_stream:stop().
+%% One of `t:exml:element/0', `t:start/0', or `t:stop/0'.
 
 -type parser_opt() :: {infinite_stream, boolean()} | {max_element_size, non_neg_integer()}.
 %% Parser options
 %%
 %% <ul>
-%%  <li>`infinite_stream': No distinct `t:start()' or `t:stop()', only `#xmlel{}' will be returned.</li>
+%%  <li>`infinite_stream': No distinct `t:start/0' or `t:stop/0', only `#xmlel{}' will be returned.</li>
 %%  <li>`max_element_size': Specifies maximum byte size of any parsed XML element.
 %%      The only exception is the "stream start" element,
 %%      for which only the size of the opening tag is limited.</li>
@@ -53,7 +53,7 @@
 new_parser() ->
     new_parser([]).
 
-%% @doc Creates a new parser
+%% @doc Creates a new parser. See `t:parser_opt/0' for configuration.
 -spec new_parser([parser_opt()]) -> {ok, parser()} | {error, any()}.
 new_parser(Opts)->
     MaxElementSize = proplists:get_value(max_element_size, Opts, 0),
@@ -65,7 +65,9 @@ new_parser(Opts)->
             Error
     end.
 
-%% @doc Makes a parser parse input
+%% @doc Makes a parser parse input.
+%%
+%% If successful, returns parsed elements and a new parser with updated buffers.
 -spec parse(parser(), binary()) ->
     {ok, parser(), [exml_stream:element()]} | {error, Reason :: any()}.
 parse(Parser, Input) when is_binary(Input) ->
