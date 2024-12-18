@@ -5,14 +5,12 @@
 
 -module(exml_nif).
 
--nifs([create/2, escape_cdata/1, to_binary/2, parse/1, parse_next/2, reset_parser/1]).
+-nifs([create/2, escape_cdata/2, to_binary/2, parse/1, parse_next/2, reset_parser/1]).
 
 -type parser() :: term().
--type stream_element() :: exml:element() | exml_stream:start() | exml_stream:stop().
 
--export([create/2, parse/1, parse_next/2, escape_cdata/1,
+-export([create/2, parse/1, parse_next/2, escape_cdata/2,
          to_binary/2, reset_parser/1]).
--export_type([parser/0, stream_element/0]).
 
 -on_load(load/0).
 
@@ -40,12 +38,12 @@ load() ->
     erlang:load_nif(filename:join(PrivDir, ?MODULE_STRING), none).
 
 -spec create(MaxChildSize :: non_neg_integer(), InfiniteStream :: boolean()) ->
-                    {ok, parser()} | {error, Reason :: any()}.
+    {ok, parser()} | {error, Reason :: any()}.
 create(_, _) ->
     erlang:nif_error(not_loaded).
 
--spec escape_cdata(Bin :: iodata()) -> binary().
-escape_cdata(_Bin) ->
+-spec escape_cdata(Bin :: iodata(), atom()) -> binary().
+escape_cdata(_Bin, _Style) ->
      erlang:nif_error(not_loaded).
 
 -spec to_binary(Elem :: exml:element(), pretty | not_pretty) -> binary().
@@ -57,8 +55,8 @@ parse(_) ->
     erlang:nif_error(not_loaded).
 
 -spec parse_next(parser(), Data :: binary() | [binary()]) ->
-                        {ok, stream_element() | undefined, non_neg_integer()} |
-                        {error, Reason :: any()}.
+    {ok, exml_stream:element() | undefined, non_neg_integer()} |
+    {error, Reason :: any()}.
 parse_next(_, _) ->
     erlang:nif_error(not_loaded).
 

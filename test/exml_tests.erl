@@ -27,6 +27,12 @@ size_of_escaped_characters_test() ->
     Raw = <<"<a>&amp;</a>">>,
     ?assertEqual(iolist_size(Raw), exml:xml_size(parse(Raw))).
 
+cdata_size_of_escaped_characters_test() ->
+    Raw = <<"<a><![CDATA[some stuff]]></a>">>,
+    CData = #xmlcdata{content = <<"some stuff">>, style = cdata},
+    Final = #xmlel{name = <<"a">>, children = [CData]},
+    ?assertEqual(iolist_size(Raw), exml:xml_size(Final)).
+
 size_of_exml_with_cdata_test() ->
     Raw = <<"<a><![CDATA[ Within this Character Data block I can
             use double dashes as much as I want (along with <, &, ', and \")]]></a>">>,

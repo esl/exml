@@ -27,9 +27,17 @@
 
 -type attr() :: {binary(), binary()}.
 -type cdata() :: #xmlcdata{}.
+%% CDATA record. Printing escaping rules defaults to escaping character-wise.
+%%
+%% Escaping rules:
+%% <ul>
+%%   <li>`escaped': escapes all characters by regular `&' control escaping.</li>
+%%   <li>`cdata': wraps the entire string into a `<![CDATA[]]>' section.</li>
+%% </ul>
 -type element() :: #xmlel{}.
 -type item() :: element() | attr() | cdata() | exml_stream:start() | exml_stream:stop().
 -type prettify() :: pretty | not_pretty.
+%% Printing indentation rule, see `to_iolist/2'.
 
 %% @doc Calculate the length of the original XML payload
 -spec xml_size(item() | [item()]) -> non_neg_integer().
@@ -37,8 +45,8 @@ xml_size([]) ->
     0;
 xml_size([Elem | Rest]) ->
     xml_size(Elem) + xml_size(Rest);
-xml_size(#xmlcdata{ content = Content }) ->
-    iolist_size(exml_nif:escape_cdata(Content));
+xml_size(#xmlcdata{content = Content, style = Style}) ->
+    iolist_size(exml_nif:escape_cdata(Content, Style));
 xml_size(#xmlel{ name = Name, attrs = Attrs, children = [] }) ->
     3 % Self-closing: </>
     + byte_size(Name) + xml_size(Attrs);
@@ -56,7 +64,7 @@ xml_size({Key, Value}) when is_binary(Key) ->
     + 4 % ="" and whitespace before
     + byte_size(Value).
 
-%% @doc Sort in ascending order a list of xml `t:item()'.
+%% @doc Sort in ascending order a list of xml `t:item/0'.
 %%
 %% Sorting is defined as calling `lists:sort/1' at:
 %% <ul>
@@ -109,7 +117,7 @@ to_iolist(Element) ->
 to_pretty_iolist(Element) ->
     to_iolist(Element, pretty).
 
-%% @doc Parses a binary or a list of binaries into an XML `t:element()'.
+%% @doc Parses a binary or a list of binaries into an XML `t:element/0'.
 -spec parse(binary() | [binary()]) -> {ok, element()} | {error, any()}.
 parse(XML) ->
     exml_nif:parse(XML).
@@ -129,8 +137,8 @@ to_iolist(#xmlstreamstart{name = Name, attrs = Attrs}, _Pretty) ->
     [Front, $>];
 to_iolist(#xmlstreamend{name = Name}, _Pretty) ->
     [<<"</">>, Name, <<">">>];
-to_iolist(#xmlcdata{content = Content}, _Pretty) ->
-    exml_nif:escape_cdata(Content);
+to_iolist(#xmlcdata{content = Content, style = Style}, _Pretty) ->
+    exml_nif:escape_cdata(Content, Style);
 to_iolist([Element], Pretty) ->
     to_iolist(Element, Pretty);
 to_iolist([#xmlstreamstart{name = Name, attrs = Attrs} | Tail] = Elements, Pretty) ->

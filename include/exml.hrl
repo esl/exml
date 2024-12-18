@@ -6,7 +6,8 @@
 -ifndef(EXML_HEADER).
 -define(EXML_HEADER, true).
 
--record(xmlcdata, {content = [] :: iodata()}).
+-record(xmlcdata, {content = [] :: iodata(),
+                   style = escaped :: escaped | cdata}).
 
 -record(xmlel, {name :: binary(),
                 attrs = [] :: [exml:attr()],
