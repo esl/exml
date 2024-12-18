@@ -9,7 +9,7 @@
 -record(xmlcdata, {content = [] :: iodata()}).
 
 -record(xmlel, {name :: binary(),
-                attrs = [] :: [exml:attr()],
+                attrs = #{} :: exml:attrs(),
                 children =  [] :: [exml:element() | exml:cdata()]}).
 
 %% Implementation of the exmlAssertEqual/2 macro is a modification of
