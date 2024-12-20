@@ -68,6 +68,8 @@ namespace {
   ERL_NIF_TERM atom_xmlstreamstart;
   ERL_NIF_TERM atom_xmlstreamend;
   ERL_NIF_TERM atom_pretty;
+  ERL_NIF_TERM atom_escaped;
+  ERL_NIF_TERM atom_cdata;
   ERL_NIF_TERM atom_true;
   constexpr const unsigned char EMPTY[1] = {0};
 
@@ -154,8 +156,9 @@ ERL_NIF_TERM make_attr_tuple(ParseCtx &ctx,
 
 ERL_NIF_TERM get_xmlcdata(ParseCtx &ctx,
                           rapidxml::xml_node<unsigned char> *node) {
-  return enif_make_tuple2(ctx.env, atom_xmlcdata,
-                          to_subbinary(ctx, node->value(), node->value_size()));
+  return enif_make_tuple3(ctx.env, atom_xmlcdata,
+                          to_subbinary(ctx, node->value(), node->value_size()),
+                          atom_escaped);
 }
 
 ERL_NIF_TERM merge_data_nodes(ParseCtx &ctx,
@@ -170,7 +173,7 @@ ERL_NIF_TERM merge_data_nodes(ParseCtx &ctx,
     node = node->next_sibling();
   }
 
-  return enif_make_tuple2(ctx.env, atom_xmlcdata, bin);
+  return enif_make_tuple3(ctx.env, atom_xmlcdata, bin, atom_escaped);
 }
 
 void append_pending_data_nodes(ParseCtx &ctx,
@@ -299,7 +302,15 @@ bool build_cdata(ErlNifEnv *env, xml_document &doc, const ERL_NIF_TERM elem[],
   if (!enif_inspect_iolist_as_binary(env, elem[1], &bin))
     return false;
 
-  auto child = doc.impl.allocate_node(rapidxml::node_data);
+  rapidxml::node_type cdata_type;
+  if (enif_compare(atom_escaped, elem[2]) == 0)
+    cdata_type = rapidxml::node_data;
+  else if (enif_compare(atom_cdata, elem[2]) == 0)
+    cdata_type = rapidxml::node_cdata;
+  else
+    return false;
+
+  auto child = doc.impl.allocate_node(cdata_type);
   child->value(bin.size > 0 ? bin.data : EMPTY, bin.size);
   node.append_node(child);
   return true;
@@ -336,7 +347,7 @@ bool build_attrs(ErlNifEnv *env, xml_document &doc, ERL_NIF_TERM attrs,
 bool build_el(ErlNifEnv *env, xml_document &doc, const ERL_NIF_TERM elem[],
               rapidxml::xml_node<unsigned char> &node) {
   ErlNifBinary name;
-  if (!enif_inspect_iolist_as_binary(env, elem[1], &name))
+  if (!enif_inspect_binary(env, elem[1], &name))
     return false;
 
   auto child = doc.impl.allocate_node(rapidxml::node_element);
@@ -358,7 +369,7 @@ bool build_child(ErlNifEnv *env, xml_document &doc, ERL_NIF_TERM child,
   if (!enif_get_tuple(env, child, &arity, &tuple))
     return false;
 
-  if (arity == 2 && enif_compare(atom_xmlcdata, tuple[0]) == 0) {
+  if (arity == 3 && enif_compare(atom_xmlcdata, tuple[0]) == 0) {
     if (!build_cdata(env, doc, tuple, node))
       return false;
   } else if (arity == 4 && enif_compare(atom_xmlel, tuple[0]) == 0) {
@@ -443,6 +454,8 @@ static int load(ErlNifEnv *env, void **priv_data, ERL_NIF_TERM load_info) {
   atom_xmlstreamstart = enif_make_atom(env, "xmlstreamstart");
   atom_xmlstreamend = enif_make_atom(env, "xmlstreamend");
   atom_pretty = enif_make_atom(env, "pretty");
+  atom_escaped = enif_make_atom(env, "escaped");
+  atom_cdata = enif_make_atom(env, "cdata");
   atom_true = enif_make_atom(env, "true");
 
   get_static_doc().impl.set_allocator(enif_alloc, enif_free);
@@ -608,7 +621,15 @@ static ERL_NIF_TERM escape_cdata(ErlNifEnv *env, int argc,
   if (!enif_inspect_iolist_as_binary(env, argv[0], &bin))
     return enif_make_badarg(env);
 
-  rapidxml::xml_node<unsigned char> node(rapidxml::node_data);
+  rapidxml::node_type cdata_type;
+  if (enif_compare(atom_escaped, argv[1]) == 0)
+    cdata_type = rapidxml::node_data;
+  else if (enif_compare(atom_cdata, argv[1]) == 0)
+    cdata_type = rapidxml::node_cdata;
+  else
+    return enif_make_badarg(env);
+
+  rapidxml::xml_node<unsigned char> node(cdata_type);
   node.value(bin.data, bin.size);
   return node_to_binary(env, node, rapidxml::print_no_indenting);
 }
@@ -647,7 +668,7 @@ static ERL_NIF_TERM reset_parser(ErlNifEnv *env, int argc,
 
 static ErlNifFunc nif_funcs[] = {
     {"create", 2, create},         {"parse", 1, parse},
-    {"parse_next", 2, parse_next}, {"escape_cdata", 1, escape_cdata},
+    {"parse_next", 2, parse_next}, {"escape_cdata", 2, escape_cdata},
     {"to_binary", 2, to_binary},   {"reset_parser", 1, reset_parser}};
 }
 
