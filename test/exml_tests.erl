@@ -29,6 +29,12 @@ size_of_escaped_characters_test() ->
 
 cdata_size_of_escaped_characters_test() ->
     Raw = <<"<a><![CDATA[some stuff]]></a>">>,
+    CData = #xmlcdata{content = <<"some stuff">>, style = escaped},
+    Final = #xmlel{name = <<"a">>, children = [CData]},
+    ?assertNotEqual(iolist_size(Raw), exml:xml_size(Final)).
+
+cdata_size_of_cdata_characters_test() ->
+    Raw = <<"<a><![CDATA[some stuff]]></a>">>,
     CData = #xmlcdata{content = <<"some stuff">>, style = cdata},
     Final = #xmlel{name = <<"a">>, children = [CData]},
     ?assertEqual(iolist_size(Raw), exml:xml_size(Final)).
