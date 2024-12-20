@@ -1,7 +1,7 @@
 exml
 ====
 
-[![GitHub Actions](https://github.com/esl/exml/workflows/ci/badge.svg?branch=master)](https://github.com/esl/exml/actions?query=workflow%3Aci+branch%3Amaster)
+[![Actions Status](https://github.com/esl/exml/actions/workflows/ci.yml/badge.svg)](https://github.com/esl/exml/actions/workflows/ci.yml)
 [![Codecov](https://codecov.io/gh/esl/exml/branch/master/graph/badge.svg)](https://codecov.io/gh/esl/exml)
 [![Hex pm](https://img.shields.io/hexpm/v/hexml.svg)](https://hex.pm/packages/hexml)
 [![Hex Docs](https://img.shields.io/badge/hex-docs-lightgreen.svg)](https://hexdocs.pm/hexml/)
