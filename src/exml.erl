@@ -17,15 +17,25 @@
          to_binary/1,
          to_iolist/1,
          xml_size/1,
-         xml_sort/1,
          to_pretty_iolist/1]).
 
+-export([filter_children/2,
+         append_children/2,
+         upsert_attr_value/3,
+         upsert_child/2,
+         insert_new_child/2,
+         remove_cdata/1,
+         remove_attr/2,
+         xml_sort/1]).
+
 -export_type([attr/0,
+              attrs/0,
               cdata/0,
               element/0,
               item/0]).
 
 -type attr() :: {binary(), binary()}.
+-type attrs() :: #{binary() => binary()}.
 -type cdata() :: #xmlcdata{}.
 %% CDATA record. Printing escaping rules defaults to escaping character-wise.
 %%
@@ -49,13 +59,13 @@ xml_size(#xmlcdata{content = Content, style = Style}) ->
     iolist_size(exml_nif:escape_cdata(Content, Style));
 xml_size(#xmlel{ name = Name, attrs = Attrs, children = [] }) ->
     3 % Self-closing: </>
-    + byte_size(Name) + xml_size(Attrs);
+    + byte_size(Name) + xml_size(maps:to_list(Attrs));
 xml_size(#xmlel{ name = Name, attrs = Attrs, children = Children }) ->
     % Opening and closing: <></>
     5 + byte_size(Name)*2
-    + xml_size(Attrs) + xml_size(Children);
+    + xml_size(maps:to_list(Attrs)) + xml_size(Children);
 xml_size(#xmlstreamstart{ name = Name, attrs = Attrs }) ->
-    byte_size(Name) + 2 + xml_size(Attrs);
+    byte_size(Name) + 2 + xml_size(maps:to_list(Attrs));
 xml_size(#xmlstreamend{ name = Name }) ->
     byte_size(Name) + 3;
 xml_size({Key, Value}) when is_binary(Key) ->
@@ -83,19 +93,62 @@ xml_size({Key, Value}) when is_binary(Key) ->
               (exml_stream:stop()) -> exml_stream:stop().
 xml_sort(#xmlcdata{} = Cdata) ->
     Cdata;
-xml_sort(#xmlel{ attrs = Attrs, children = Children } = El) ->
+xml_sort(#xmlel{children = Children} = El) ->
     El#xmlel{
-      attrs = lists:sort(Attrs),
       children = [ xml_sort(C) || C <- Children ]
      };
-xml_sort(#xmlstreamstart{ attrs = Attrs } = StreamStart) ->
-    StreamStart#xmlstreamstart{ attrs = lists:sort(Attrs) };
+xml_sort(#xmlstreamstart{} = StreamStart) ->
+    StreamStart;
 xml_sort(#xmlstreamend{} = StreamEnd) ->
     StreamEnd;
 xml_sort({Key, Value}) ->
     {Key, Value};
 xml_sort(Elements) when is_list(Elements) ->
     lists:sort([ xml_sort(E) || E <- Elements ]).
+
+%% @doc Return the given `t:element/0' with the specified filter passed over its children.
+-spec filter_children(element(), fun((element() | cdata()) -> boolean())) -> element().
+filter_children(#xmlel{children = Children} = El, Pred) ->
+    NoCdata = lists:filter(Pred, Children),
+    El#xmlel{children = NoCdata}.
+
+%% @doc Return the given `t:element/0' without any `t:cdata/0' on its children.
+-spec remove_cdata(element()) -> element().
+remove_cdata(#xmlel{children = Children} = El) ->
+    Pred = fun(Child) -> not is_record(Child, xmlcdata) end,
+    NoCdata = lists:filter(Pred, Children),
+    El#xmlel{children = NoCdata}.
+
+%% @doc Remove a given attribute from a `t:element/0'.
+-spec remove_attr(exml:element(), binary()) -> element().
+remove_attr(#xmlel{attrs = Attrs} = El, Key) ->
+    El#xmlel{attrs = maps:remove(Key, Attrs)}.
+
+%% @doc Append new children elements to a `t:element/0'.
+-spec append_children(element(), [element() | cdata()]) -> element().
+append_children(#xmlel{children = Children} = El, ExtraChildren) ->
+    El#xmlel{children = Children ++ ExtraChildren}.
+
+%% @doc Replace or insert the value of a given attribute.
+-spec upsert_attr_value(element(), binary(), binary()) -> element().
+upsert_attr_value(#xmlel{attrs = Attrs} = El, Key, Value) ->
+    El#xmlel{attrs = Attrs#{Key => Value}}.
+
+%% @doc Replace or insert a child by the given one.
+-spec upsert_child(element(), element()) -> element().
+upsert_child(#xmlel{children = Children} = El, #xmlel{name = Name} = NewChild) ->
+    Children2 = lists:keystore(Name, #xmlel.name, Children, NewChild),
+    El#xmlel{children = Children2}.
+
+%% @doc Insert a child by the given one, if none existed.
+-spec insert_new_child(element(), element()) -> element().
+insert_new_child(#xmlel{children = Children} = El, #xmlel{name = Name} = NewChild) ->
+    case lists:keymember(Name, #xmlel.name, Children) of
+        false ->
+            El#xmlel{children = [NewChild | Children]};
+        true ->
+            El
+    end.
 
 %% @equiv erlang:binary_to_list(to_binary(Element))
 -spec to_list(exml_stream:element() | [exml_stream:element()]) -> string().
