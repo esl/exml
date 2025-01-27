@@ -50,7 +50,7 @@ escape_cdata(_Bin, _Style) ->
 to_binary(_Elem, _Pretty) ->
     erlang:nif_error(not_loaded).
 
--spec parse(Bin :: binary() | [binary()]) -> {ok, exml:element()} | {error, Reason :: any()}.
+-spec parse(Bin :: binary() | [binary()]) -> {ok, exml:element()} | {error, binary()}.
 parse(_) ->
     erlang:nif_error(not_loaded).
 
