@@ -31,7 +31,7 @@
 %% `#xmlstreamend{}' record.
 -type parser() :: #parser{}.
 %% `#parser{}' record. Keeps track of unparsed buffers.
--type element() :: exml:element() | exml_stream:start() | exml_stream:stop().
+-type element() :: exml:element() | start() | stop().
 %% One of `t:exml:element/0', `t:start/0', or `t:stop/0'.
 
 -type parser_opt() :: {infinite_stream, boolean()} | {max_element_size, non_neg_integer()}.
@@ -69,7 +69,7 @@ new_parser(Opts)->
 %%
 %% If successful, returns parsed elements and a new parser with updated buffers.
 -spec parse(parser(), binary()) ->
-    {ok, parser(), [exml_stream:element()]} | {error, Reason :: any()}.
+    {ok, parser(), [element()]} | {error, Reason :: iodata()}.
 parse(Parser, Input) when is_binary(Input) ->
     #parser{event_parser = EventParser, buffer = OldBuf} = Parser,
     Buffer = OldBuf ++ [Input],
