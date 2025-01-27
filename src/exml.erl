@@ -31,6 +31,7 @@
 -export_type([attrs/0,
               cdata/0,
               element/0,
+              child/0,
               item/0]).
 
 -type attrs() :: #{binary() => binary()}.
@@ -44,6 +45,7 @@
 %% </ul>
 -type element() :: #xmlel{}.
 -type item() :: element() | cdata() | exml_stream:start() | exml_stream:stop().
+-type child() :: element() | cdata().
 -type prettify() :: pretty | not_pretty.
 %% Printing indentation rule, see `to_iolist/2'.
 
