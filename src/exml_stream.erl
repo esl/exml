@@ -69,7 +69,7 @@ new_parser(Opts)->
 %%
 %% If successful, returns parsed elements and a new parser with updated buffers.
 -spec parse(parser(), binary()) ->
-    {ok, parser(), [element()]} | {error, Reason :: iodata()}.
+    {ok, parser(), [element()]} | {error, Reason :: binary()}.
 parse(Parser, Input) when is_binary(Input) ->
     #parser{event_parser = EventParser, buffer = OldBuf} = Parser,
     Buffer = OldBuf ++ [Input],
