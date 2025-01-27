@@ -52,11 +52,6 @@ sort_xmlel_identity_test() ->
            },
     ?assertEqual(El, exml:xml_sort(El)).
 
-sort_xmlel_attributes_test() ->
-    Attrs = [{<<"attr1">>, <<"foo">>}, {<<"attr2">>, <<"bar">>}],
-    ToOrder = [{<<"attr2">>, <<"bar">>}, {<<"attr1">>, <<"foo">>}],
-    ?assertEqual(Attrs, exml:xml_sort(ToOrder)).
-
 remove_cdata_test() ->
     Attrs = #{<<"attr1">> => <<"foo">>, <<"attr2">> => <<"bar">>},
     Child1 = #xmlel{name = <<"el1">>, attrs = Attrs},

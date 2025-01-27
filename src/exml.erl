@@ -28,13 +28,12 @@
          remove_attr/2,
          xml_sort/1]).
 
--export_type([attr/0,
-              attrs/0,
+-export_type([attrs/0,
               cdata/0,
               element/0,
+              child/0,
               item/0]).
 
--type attr() :: {binary(), binary()}.
 -type attrs() :: #{binary() => binary()}.
 -type cdata() :: #xmlcdata{}.
 %% CDATA record. Printing escaping rules defaults to escaping character-wise.
@@ -45,7 +44,8 @@
 %%   <li>`cdata': wraps the entire string into a `<![CDATA[]]>' section.</li>
 %% </ul>
 -type element() :: #xmlel{}.
--type item() :: element() | attr() | cdata() | exml_stream:start() | exml_stream:stop().
+-type item() :: element() | cdata() | exml_stream:start() | exml_stream:stop().
+-type child() :: element() | cdata().
 -type prettify() :: pretty | not_pretty.
 %% Printing indentation rule, see `to_iolist/2'.
 
@@ -87,7 +87,6 @@ xml_size({Key, Value}) when is_binary(Key) ->
 %% https://github.com/erszcz/rxml/commit/e8483408663f0bc2af7896e786c1cdea2e86e43d
 -spec xml_sort([item()]) -> [item()];
               (element()) -> element();
-              (attr()) -> attr();
               (cdata()) -> cdata();
               (exml_stream:start()) -> exml_stream:start();
               (exml_stream:stop()) -> exml_stream:stop().
@@ -101,8 +100,6 @@ xml_sort(#xmlstreamstart{} = StreamStart) ->
     StreamStart;
 xml_sort(#xmlstreamend{} = StreamEnd) ->
     StreamEnd;
-xml_sort({Key, Value}) ->
-    {Key, Value};
 xml_sort(Elements) when is_list(Elements) ->
     lists:sort([ xml_sort(E) || E <- Elements ]).
 

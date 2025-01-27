@@ -11,7 +11,7 @@
 
 -record(xmlel, {name :: binary(),
                 attrs = #{} :: exml:attrs(),
-                children =  [] :: [exml:element() | exml:cdata()]}).
+                children = [] :: [exml:child()]}).
 
 %% Implementation of the exmlAssertEqual/2 macro is a modification of
 %% https://github.com/erszcz/rxml/commit/e8483408663f0bc2af7896e786c1cdea2e86e43d#diff-2cb5d18741df32f4ead70c21fdd221d1

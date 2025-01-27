@@ -583,9 +583,10 @@ static ERL_NIF_TERM parse_next(ErlNifEnv *env, int argc,
   }
 
   if (error_msg) {
-    return enif_make_tuple2(
-        env, atom_error,
-        enif_make_string(env, error_msg, ERL_NIF_LATIN1));
+    ERL_NIF_TERM error_message =
+            to_subbinary(ctx, (const unsigned char *)error_msg, strlen(error_msg));
+
+    return enif_make_tuple2(env, atom_error, error_message);
   }
 
   return enif_make_tuple3(
@@ -608,9 +609,12 @@ static ERL_NIF_TERM parse(ErlNifEnv *env, int argc, const ERL_NIF_TERM argv[]) {
     return enif_make_tuple2(env, atom_ok, element);
   }
 
-  return enif_make_tuple2(
-      env, atom_error,
-      enif_make_string(env, result.error_message.c_str(), ERL_NIF_LATIN1));
+  ERL_NIF_TERM error_message =
+        to_subbinary(ctx,
+                     (const unsigned char *)result.error_message.c_str(),
+                     result.error_message.size());
+
+  return enif_make_tuple2(env, atom_error, error_message);
 }
 
 static ERL_NIF_TERM escape_cdata(ErlNifEnv *env, int argc,
