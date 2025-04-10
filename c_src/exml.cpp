@@ -17,7 +17,7 @@
 #include <thread>
 #include <vector>
 
-using ustring = std::basic_string<unsigned char>;
+using ustring = std::vector<unsigned char>;
 
 class xml_document {
 public:
@@ -512,8 +512,7 @@ static ERL_NIF_TERM parse_next(ErlNifEnv *env, int,
         error_msg = "element too big";
       } else {
         auto name_tag = node_name(doc.impl.first_node());
-        parser->stream_tag =
-          ustring{std::get<0>(name_tag), std::get<1>(name_tag)};
+        parser->stream_tag = ustring(std::get<0>(name_tag), std::get<0>(name_tag) + std::get<1>(name_tag));
         element = make_stream_start_tuple(ctx, doc.impl.first_node());
       }
     }
@@ -525,7 +524,7 @@ static ERL_NIF_TERM parse_next(ErlNifEnv *env, int,
     if (parseOpenRes.has_error)
       return false;
     auto tag_name = node_name(doc.impl.first_node());
-    return ustring{std::get<0>(tag_name), std::get<1>(tag_name)} ==
+    return ustring(std::get<0>(tag_name), std::get<0>(tag_name) + std::get<1>(tag_name)) ==
            parser->stream_tag;
   };
 
