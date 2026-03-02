@@ -84,3 +84,12 @@ Notes
 =====
 
 The implementation uses C++ thread-local memory pools of size 10MB by default (override `RAPIDXML_STATIC_POOL_SIZE` and/or `RAPIDXML_DYNAMIC_POOL_SIZE` at compilation time if desired differently), to maximise cache locality and memory allocation patterns. To also improve performance, the NIF calls are not checking input size, nor timeslicing themselves, nor running in dirty schedulers: that means that if called with too big inputs, the NIFs can starve the VM. It's up to the dev to throttle the input sizes and fine-tune the memory pool sizes.
+
+Releasing to Hex.pm
+=====
+
+Creating a GitHub release (non-draft, non-prerelease) automatically publishes the package to [Hex.pm](https://hex.pm/) via the **Publish to Hex** workflow.
+This workflow can also be triggered manually from the Actions tab — make sure to run it from the specific tag you want to publish.
+
+To revert a published version, run the **Revert published version from Hex** workflow from the Actions tab, providing the version to revert.
+Hex.pm only allows reverting within 1 hour of publishing — after that, the version can only be *retired*.
