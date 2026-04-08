@@ -10,6 +10,7 @@
 #if !defined(RAPIDXML_NO_STDLIB)
     #include <cstdlib>      // For std::size_t
     #include <cassert>      // For assert
+    #include <cstring>      // For std::memmove
     #include <new>          // For placement new
 #endif
 
@@ -304,6 +305,42 @@ namespace rapidxml
     //! <br><br>
     //! See xml_document::parse() function.
     const int parse_full = parse_declaration_node | parse_comment_nodes | parse_doctype_node | parse_pi_nodes | parse_validate_closing_tags;
+
+    template<int Flags>
+    void simd_advance_text_pred(unsigned char *&text);
+    template<int Flags>
+    void simd_advance_text_pure_no_ws(unsigned char *&text);
+    template<int Flags>
+    void simd_advance_text_pure_with_ws(unsigned char *&text);
+    template<int Flags>
+    void simd_advance_attr_dquote_full(unsigned char *&text);
+    template<int Flags>
+    void simd_advance_attr_squote_full(unsigned char *&text);
+    template<int Flags>
+    void simd_advance_attr_dquote_pure(unsigned char *&text);
+    template<int Flags>
+    void simd_advance_attr_squote_pure(unsigned char *&text);
+    template<int Flags>
+    void simd_advance_whitespace(unsigned char *&text);
+    template<int Flags>
+    void simd_advance_node_name(unsigned char *&text);
+    template<int Flags>
+    void simd_advance_element_name(unsigned char *&text);
+    template<int Flags>
+    void simd_advance_attribute_name(unsigned char *&text);
+    template<typename Ch>
+    void simd_trim_trailing_whitespace(Ch *&end, Ch *value_start);
+
+    template<int Flags, typename Ch>
+    void simd_scan_until_pi_value_end(Ch *&text);
+    template<int Flags, typename Ch>
+    void simd_scan_until_xml_declaration_skip_end(Ch *&text);
+    template<int Flags, typename Ch>
+    void simd_scan_until_comment_end(Ch *&text);
+    template<int Flags, typename Ch>
+    void simd_scan_until_cdata_end(Ch *&text);
+    template<typename Ch>
+    void simd_scan_until_gt_unrecognized(Ch *&text);
 
     ///////////////////////////////////////////////////////////////////////
     // Internals
@@ -1898,16 +1935,77 @@ namespace rapidxml
             }
         }
 
-        // Skip characters until predicate evaluates to true
-        template<class StopPred, int Flags>
-        static void skip(Ch *&text)
-        {
+        template<int Flags>
+        static void skip_simd_dispatch_impl(int, text_pred *, Ch *&text) {
+            simd_advance_text_pred<Flags>(reinterpret_cast<unsigned char *&>(text));
+        }
+
+        template<int Flags>
+        static void skip_simd_dispatch_impl(int, text_pure_no_ws_pred *, Ch *&text) {
+            simd_advance_text_pure_no_ws<Flags>(reinterpret_cast<unsigned char *&>(text));
+        }
+
+        template<int Flags>
+        static void skip_simd_dispatch_impl(int, text_pure_with_ws_pred *, Ch *&text) {
+            simd_advance_text_pure_with_ws<Flags>(reinterpret_cast<unsigned char *&>(text));
+        }
+
+        template<int Flags>
+        static void skip_simd_dispatch_impl(int, attribute_value_pred<Ch('"')> *, Ch *&text) {
+            simd_advance_attr_dquote_full<Flags>(reinterpret_cast<unsigned char *&>(text));
+        }
+
+        template<int Flags>
+        static void skip_simd_dispatch_impl(int, attribute_value_pred<Ch('\'')> *, Ch *&text) {
+            simd_advance_attr_squote_full<Flags>(reinterpret_cast<unsigned char *&>(text));
+        }
+
+        template<int Flags>
+        static void skip_simd_dispatch_impl(int, attribute_value_pure_pred<Ch('"')> *, Ch *&text) {
+            simd_advance_attr_dquote_pure<Flags>(reinterpret_cast<unsigned char *&>(text));
+        }
+
+        template<int Flags>
+        static void skip_simd_dispatch_impl(int, attribute_value_pure_pred<Ch('\'')> *, Ch *&text) {
+            simd_advance_attr_squote_pure<Flags>(reinterpret_cast<unsigned char *&>(text));
+        }
+
+        template<int Flags>
+        static void skip_simd_dispatch_impl(int, whitespace_pred *, Ch *&text) {
+            simd_advance_whitespace<Flags>(reinterpret_cast<unsigned char *&>(text));
+        }
+
+        template<int Flags>
+        static void skip_simd_dispatch_impl(int, node_name_pred *, Ch *&text) {
+            simd_advance_node_name<Flags>(reinterpret_cast<unsigned char *&>(text));
+        }
+
+        template<int Flags>
+        static void skip_simd_dispatch_impl(int, element_name_pred *, Ch *&text) {
+            simd_advance_element_name<Flags>(reinterpret_cast<unsigned char *&>(text));
+        }
+
+        template<int Flags>
+        static void skip_simd_dispatch_impl(int, attribute_name_pred *, Ch *&text) {
+            simd_advance_attribute_name<Flags>(reinterpret_cast<unsigned char *&>(text));
+        }
+
+        template<int Flags, class P>
+        static void skip_simd_dispatch_impl(long, P *, Ch *&text) {
             Ch *tmp = text;
-            while (StopPred::test(*tmp)) {
+            while (P::test(*tmp)) {
                 check_control<control_points_pred, Flags>(tmp);
                 ++tmp;
             }
             text = tmp;
+        }
+
+        // Skip characters while StopPred holds. SIMD fast-paths omit the scalar loop; unknown
+        // predicates use the long dispatch above (scalar only).
+        template<class StopPred, int Flags>
+        static void skip(Ch *&text)
+        {
+            skip_simd_dispatch_impl<Flags>(0, static_cast<StopPred *>(0), text);
         }
 
         // Fail if a forbidden control character is found
@@ -2062,7 +2160,32 @@ namespace rapidxml
                     }
                 }
 
-                // No replacement, only copy character
+                // Copy literal run: batch when more than one byte, or one byte after a zero-length
+                // run scan (e.g. lone '&' with entity translation needs single-byte path).
+                {
+                    const bool entities = !(Flags & parse_no_entity_translation);
+                    const bool normalize = (Flags & parse_normalize_whitespace) != 0;
+                    const Ch *run = src;
+                    while (StopPred::test(*run)) {
+                        if (entities && *run == Ch('&'))
+                            break;
+                        if (normalize && whitespace_pred::test(*run))
+                            break;
+                        if (Flags & parse_validate_control_chars) {
+                            if (!control_points_pred::test(*run))
+                                RAPIDXML_PARSE_ERROR("unexpected control character", const_cast<Ch *>(run));
+                        }
+                        ++run;
+                    }
+                    const std::size_t n = static_cast<std::size_t>(run - src);
+                    if (n > 0) {
+                        if (dest != src)
+                            std::memmove(dest, src, n * sizeof(Ch));
+                        src += n;
+                        dest += n;
+                        continue;
+                    }
+                }
                 check_control<control_points_pred, Flags>(src);
                 *dest++ = *src++;
 
@@ -2097,13 +2220,7 @@ namespace rapidxml
             // If parsing of declaration is disabled
             if (!(Flags & parse_declaration_node))
             {
-                // Skip until end of declaration
-                while (text[0] != Ch('?') || text[1] != Ch('>'))
-                {
-                    if (!text[0]) RAPIDXML_PARSE_ERROR("unexpected end of data", text);
-                    check_control<control_points_pred, Flags>(text);
-                    ++text;
-                }
+                simd_scan_until_xml_declaration_skip_end<Flags>(text);
                 text += 2;    // Skip '?>'
                 return 0;
             }
@@ -2131,13 +2248,7 @@ namespace rapidxml
             // If parsing of comments is disabled
             if (!(Flags & parse_comment_nodes))
             {
-                // Skip until end of comment
-                while (text[0] != Ch('-') || text[1] != Ch('-') || text[2] != Ch('>'))
-                {
-                    if (!text[0]) RAPIDXML_PARSE_ERROR("unexpected end of data", text);
-                    check_control<control_points_pred, Flags>(text);
-                    ++text;
-                }
+                simd_scan_until_comment_end<Flags>(text);
                 text += 3;     // Skip '-->'
                 return 0;      // Do not produce comment node
             }
@@ -2145,13 +2256,7 @@ namespace rapidxml
             // Remember value start
             Ch *value = text;
 
-            // Skip until end of comment
-            while (text[0] != Ch('-') || text[1] != Ch('-') || text[2] != Ch('>'))
-            {
-                if (!text[0]) RAPIDXML_PARSE_ERROR("unexpected end of data", text);
-                check_control<control_points_pred, Flags>(text);
-                ++text;
-            }
+            simd_scan_until_comment_end<Flags>(text);
 
             // Create comment node
             xml_node<Ch> *comment = this->allocate_node(node_comment);
@@ -2253,13 +2358,7 @@ namespace rapidxml
                 // Remember start of pi
                 Ch *value = text;
 
-                // Skip to '?>'
-                while (text[0] != Ch('?') || text[1] != Ch('>'))
-                {
-                    if (*text == Ch('\0'))
-                        RAPIDXML_PARSE_ERROR("unexpected end of data", text);
-                    ++text;
-                }
+                simd_scan_until_pi_value_end<Flags>(text);
 
                 // Set pi value (verbatim, no entity expansion or whitespace normalization)
                 pi->value(value, text - value);
@@ -2276,13 +2375,7 @@ namespace rapidxml
             }
             else
             {
-                // Skip to '?>'
-                while (text[0] != Ch('?') || text[1] != Ch('>'))
-                {
-                    if (*text == Ch('\0'))
-                        RAPIDXML_PARSE_ERROR("unexpected end of data", text);
-                    ++text;
-                }
+                simd_scan_until_pi_value_end<Flags>(text);
                 text += 2;    // Skip '?>'
                 return 0;
             }
@@ -2316,9 +2409,13 @@ namespace rapidxml
                 }
                 else
                 {
-                    // Backup until non-whitespace character is found
-                    while (whitespace_pred::test(*(end - 1)))
-                        --end;
+                    if (sizeof(Ch) == 1)
+                        simd_trim_trailing_whitespace<Ch>(end, value);
+                    else
+                    {
+                        while (whitespace_pred::test(*(end - 1)))
+                            --end;
+                    }
                 }
             }
 
@@ -2355,25 +2452,13 @@ namespace rapidxml
             // If CDATA is disabled
             if (Flags & parse_no_data_nodes)
             {
-                // Skip until end of cdata
-                while (text[0] != Ch(']') || text[1] != Ch(']') || text[2] != Ch('>'))
-                {
-                    if (!text[0]) RAPIDXML_PARSE_ERROR("unexpected end of data", text);
-                    check_control<control_points_pred, Flags>(text);
-                    ++text;
-                }
+                simd_scan_until_cdata_end<Flags>(text);
                 text += 3;      // Skip ]]>
                 return 0;       // Do not produce CDATA node
             }
 
-            // Skip until end of cdata
             Ch *value = text;
-            while (text[0] != Ch(']') || text[1] != Ch(']') || text[2] != Ch('>'))
-            {
-                if (!text[0]) RAPIDXML_PARSE_ERROR("unexpected end of data", text);
-                check_control<control_points_pred, Flags>(text);
-                ++text;
-            }
+            simd_scan_until_cdata_end<Flags>(text);
 
             // Create new cdata node
             xml_node<Ch> *cdata = this->allocate_node(node_cdata);
@@ -2523,12 +2608,7 @@ namespace rapidxml
 
                 // Attempt to skip other, unrecognized node types starting with <!
                 ++text;     // Skip !
-                while (*text != Ch('>'))
-                {
-                    if (*text == 0)
-                        RAPIDXML_PARSE_ERROR("unexpected end of data", text);
-                    ++text;
-                }
+                simd_scan_until_gt_unrecognized(text);
                 ++text;     // Skip '>'
                 return 0;   // No node recognized
 
@@ -3012,6 +3092,8 @@ namespace rapidxml
     //! \endcond
 
 }
+
+#include "simd_skip.hpp"
 
 // Undefine internal macros
 #undef RAPIDXML_PARSE_ERROR
