@@ -17,7 +17,41 @@
 #include <thread>
 #include <vector>
 
-using ustring = std::vector<unsigned char>;
+template <typename T>
+struct enif_allocator {
+  using value_type = T;
+
+  enif_allocator() noexcept = default;
+
+  template <typename U>
+  enif_allocator(const enif_allocator<U> &) noexcept {}
+
+  T *allocate(std::size_t n) {
+    if (n > std::size_t(-1) / sizeof(T))
+      throw std::bad_alloc();
+    void *p = enif_alloc(n * sizeof(T));
+    if (!p)
+      throw std::bad_alloc();
+    return static_cast<T *>(p);
+  }
+
+  void deallocate(T *p, std::size_t) noexcept { enif_free(p); }
+};
+
+template <typename T, typename U>
+constexpr bool operator==(const enif_allocator<T> &, const enif_allocator<U> &) noexcept {
+  return true;
+}
+
+template <typename T, typename U>
+constexpr bool operator!=(const enif_allocator<T> &, const enif_allocator<U> &) noexcept {
+  return false;
+}
+
+template <typename T>
+using nif_vector = std::vector<T, enif_allocator<T>>;
+
+using ustring = nif_vector<unsigned char>;
 
 class xml_document {
 public:
@@ -86,8 +120,8 @@ struct Parser {
   std::uint64_t max_element_size = 0;
   bool infinite_stream = false;
 
-  static thread_local std::vector<unsigned char> buffer;
-  static thread_local std::vector<ERL_NIF_TERM> term_buffer;
+  static thread_local nif_vector<unsigned char> buffer;
+  static thread_local nif_vector<ERL_NIF_TERM> term_buffer;
 
   bool copy_buffer(ErlNifEnv *env, ERL_NIF_TERM buf) {
     buffer.clear();
@@ -116,8 +150,8 @@ struct Parser {
   }
 };
 
-thread_local std::vector<unsigned char> Parser::buffer;
-thread_local std::vector<ERL_NIF_TERM> Parser::term_buffer;
+thread_local nif_vector<unsigned char> Parser::buffer;
+thread_local nif_vector<ERL_NIF_TERM> Parser::term_buffer;
 
 struct ParseCtx {
   ErlNifEnv *env;
@@ -170,7 +204,7 @@ ERL_NIF_TERM merge_data_nodes(ParseCtx &ctx,
 }
 
 void append_pending_data_nodes(ParseCtx &ctx,
-                               std::vector<ERL_NIF_TERM> &children,
+                               nif_vector<ERL_NIF_TERM> &children,
                                rapidxml::xml_node<unsigned char> *node,
                                const std::size_t pending) {
   if (pending == 0)
@@ -186,7 +220,7 @@ ERL_NIF_TERM make_xmlel(ParseCtx &ctx, rapidxml::xml_node<unsigned char> *node);
 
 ERL_NIF_TERM get_children_tuple(ParseCtx &ctx,
                                 rapidxml::xml_node<unsigned char> *node) {
-  std::vector<ERL_NIF_TERM> &children = Parser::term_buffer;
+  nif_vector<ERL_NIF_TERM> &children = Parser::term_buffer;
   std::size_t begin = children.size();
 
   rapidxml::xml_node<unsigned char> *first_data_node = nullptr;
@@ -395,7 +429,7 @@ bool build_children(ErlNifEnv *env, xml_document &doc, ERL_NIF_TERM children,
 ERL_NIF_TERM node_to_binary(ErlNifEnv *env,
                             rapidxml::xml_node<unsigned char> &node,
                             int flags) {
-  static thread_local std::vector<unsigned char> print_buffer;
+  static thread_local nif_vector<unsigned char> print_buffer;
   print_buffer.clear();
 
   rapidxml::print(std::back_inserter(print_buffer), node, flags);
