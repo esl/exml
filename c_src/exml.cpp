@@ -116,6 +116,9 @@ namespace {
 } // namespace
 
 struct Parser {
+  // Trailing bytes after the XML terminator so 128-bit simd skip can load 16 bytes safely.
+  static constexpr std::size_t kSimdTailPadding = 15;
+
   ustring stream_tag;
   std::uint64_t max_element_size = 0;
   bool infinite_stream = false;
@@ -141,6 +144,7 @@ struct Parser {
     }
 
     buffer.push_back('\0');
+    buffer.resize(buffer.size() + kSimdTailPadding, '\0');
     return true;
   }
 
@@ -582,8 +586,9 @@ static ERL_NIF_TERM parse_next(ErlNifEnv *env, int,
     parseStreamOpen();
   } else if (has_stream_closing_tag(parser, offset)) {
     doc.clear();
-    // no data after closing tag
-    result.rest = &*Parser::buffer.rbegin();
+    // no data after closing tag (rest at logical terminator, not SIMD tail padding)
+    result.rest =
+        Parser::buffer.data() + Parser::buffer.size() - Parser::kSimdTailPadding - 1;
     element = make_stream_end_tuple(ctx);
   } else {
     parseElement();
@@ -597,7 +602,8 @@ static ERL_NIF_TERM parse_next(ErlNifEnv *env, int,
   if (result.eof) {
     // Return an error if an incomplete element has at least max_element_size characters.
     if (parser->max_element_size &&
-        Parser::buffer.size() - offset > parser->max_element_size) {
+        Parser::buffer.size() - Parser::kSimdTailPadding - offset >
+            parser->max_element_size) {
       error_msg = "element too big";
     } else {
       result.rest = Parser::buffer.data() + offset;
@@ -608,8 +614,10 @@ static ERL_NIF_TERM parse_next(ErlNifEnv *env, int,
   }
 
   if (!error_msg) {
-    // Return an error when null character is found.
-    std::size_t rest_size = &Parser::buffer.back() - result.rest;
+    // Return an error when null character is found (compare against logical end, excluding SIMD padding).
+    const std::size_t logical_size = Parser::buffer.size() - Parser::kSimdTailPadding;
+    const unsigned char *logical_last = Parser::buffer.data() + logical_size - 1;
+    std::size_t rest_size = logical_last - result.rest;
     if (std::strlen(reinterpret_cast<const char*>(result.rest)) != rest_size)
       error_msg = "null character found in buffer";
   }
