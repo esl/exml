@@ -426,18 +426,20 @@ bool build_children(ErlNifEnv *env, xml_document &doc, ERL_NIF_TERM children,
   return true;
 }
 
+using NifPrintBuffer =
+    rapidxml::PrintBuffer<unsigned char, enif_allocator<unsigned char>, RAPIDXML_STATIC_POOL_SIZE>;
+
 ERL_NIF_TERM node_to_binary(ErlNifEnv *env,
                             rapidxml::xml_node<unsigned char> &node,
                             int flags) {
-  static thread_local nif_vector<unsigned char> print_buffer;
+  static thread_local NifPrintBuffer print_buffer;
   print_buffer.clear();
 
-  rapidxml::print(std::back_inserter(print_buffer), node, flags);
+  rapidxml::print(print_buffer, node, flags);
 
   ERL_NIF_TERM ret_binary;
-  unsigned char *data =
-      enif_make_new_binary(env, print_buffer.size(), &ret_binary);
-  std::copy(print_buffer.begin(), print_buffer.end(), data);
+  unsigned char *data = enif_make_new_binary(env, print_buffer.size(), &ret_binary);
+  std::memcpy(data, print_buffer.data(), print_buffer.size());
   return ret_binary;
 }
 
