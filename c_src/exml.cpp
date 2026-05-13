@@ -13,6 +13,7 @@
 #include <chrono>
 #include <cstring>
 #include <iostream>
+#include <limits>
 #include <string>
 #include <thread>
 #include <vector>
@@ -27,7 +28,7 @@ struct enif_allocator {
   enif_allocator(const enif_allocator<U> &) noexcept {}
 
   T *allocate(std::size_t n) {
-    if (n > std::size_t(-1) / sizeof(T))
+    if (n > std::numeric_limits<std::size_t>::max() / sizeof(T))
       throw std::bad_alloc();
     void *p = enif_alloc(n * sizeof(T));
     if (!p)
