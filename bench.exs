@@ -1,14 +1,22 @@
-# Usage (from the repository root, after `rebar3 compile`):
-#   rebar3 compile
-#   elixir -pa "$(rebar3 path)" bench.exs
-# Optional: BENCH_TIME=3 BENCH_WARMUP=1 elixir -pa "$(rebar3 path)" bench.exs
+# Usage:
+#   elixir bench.exs
+# Optional:
+#   BENCH_TIME=3 BENCH_WARMUP=1 elixir bench.exs
 #
 # Requires Elixir with Hex (Mix.install fetches Benchee).
 
-Mix.install([{:benchee, "~> 1.5"}])
+Mix.install([
+  {:benchee, "~> 1.5"},
+  {:exml, path: "."}
+])
 
-{bench_time, _} = Integer.parse(System.get_env("BENCH_TIME", "5"))
-{bench_warmup, _} = Integer.parse(System.get_env("BENCH_WARMUP", "2"))
+bench_time =
+  System.get_env("BENCH_TIME", "5")
+  |> String.to_integer()
+
+bench_warmup =
+  System.get_env("BENCH_WARMUP", "2")
+  |> String.to_integer()
 
 # --- Payloads: widely varying structure (size kept moderate so default time budget finishes) ---
 
