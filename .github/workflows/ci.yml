@@ -9,7 +9,7 @@ on:
 
 jobs:
   test:
-    name: OTP ${{matrix.otp_vsn}}
+    name: Test OTP ${{matrix.otp_vsn}}
     strategy:
       matrix:
         otp_vsn: ['28', '27', '26']
@@ -40,3 +40,24 @@ jobs:
           token: ${{ secrets.CODECOV_TOKEN }}
           fail_ci_if_error: true
           verbose: true
+  benchmark:
+    name: Benchmark suite execution OTP ${{matrix.otp_vsn}}
+    strategy:
+      matrix:
+        otp_vsn: ['28', '27']
+        elixir_vsn: ['1.19']
+        rebar_vsn: ['3.27']
+    runs-on: 'ubuntu-24.04'
+    steps:
+      - uses: actions/checkout@v4
+      - uses: erlef/setup-beam@v1
+        with:
+          otp-version: ${{ matrix.otp_vsn }}
+          elixir-version: ${{ matrix.elixir_vsn }}
+          rebar3-version: ${{ matrix.rebar_vsn }}
+      - run: |
+          {
+            echo -e '## Benchmark Results\n\n```'
+            elixir bench.exs
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
