@@ -11,11 +11,104 @@
 // Only include streams if not disabled
 #ifndef RAPIDXML_NO_STREAMS
     #include <ostream>
-    #include <iterator>
 #endif
+
+#include <cstring>
+#include <memory>
 
 namespace rapidxml
 {
+
+    ///////////////////////////////////////////////////////////////////////
+    // PrintBuffer: bulk-write output buffer with pluggable allocator
+
+    template <class Ch, class Alloc = std::allocator<Ch>, std::size_t InitCap = 0>
+    class PrintBuffer {
+        Alloc m_alloc;
+        Ch *m_data;
+        std::size_t m_size;
+        std::size_t m_capacity;
+
+        void grow(std::size_t needed) {
+            std::size_t cap = m_capacity ? m_capacity : 64;
+            while (cap < needed) cap *= 2;
+            Ch *new_data = std::allocator_traits<Alloc>::allocate(m_alloc, cap);
+            if (m_data) {
+                std::memcpy(new_data, m_data, m_size * sizeof(Ch));
+                std::allocator_traits<Alloc>::deallocate(m_alloc, m_data, m_capacity);
+            }
+            m_data = new_data;
+            m_capacity = cap;
+        }
+
+        void init() {
+            m_size = 0;
+            if (InitCap > 0) {
+                m_data = std::allocator_traits<Alloc>::allocate(m_alloc, InitCap);
+                m_capacity = InitCap;
+            } else {
+                m_data = nullptr;
+                m_capacity = 0;
+            }
+        }
+
+    public:
+        PrintBuffer() : m_alloc() {
+            init();
+        }
+        explicit PrintBuffer(const Alloc &alloc) : m_alloc(alloc) {
+            init();
+        }
+        ~PrintBuffer() {
+            if (m_data)
+                std::allocator_traits<Alloc>::deallocate(m_alloc, m_data, m_capacity);
+        }
+
+        PrintBuffer(const PrintBuffer &) = delete;
+        PrintBuffer &operator=(const PrintBuffer &) = delete;
+        PrintBuffer(PrintBuffer &&o) noexcept
+            : m_alloc(std::move(o.m_alloc)), m_data(o.m_data),
+              m_size(o.m_size), m_capacity(o.m_capacity) {
+            o.m_data = nullptr; o.m_size = 0; o.m_capacity = 0;
+        }
+        PrintBuffer &operator=(PrintBuffer &&o) noexcept {
+            if (this != &o) {
+                if (m_data) std::allocator_traits<Alloc>::deallocate(m_alloc, m_data, m_capacity);
+                m_alloc = std::move(o.m_alloc);
+                m_data = o.m_data; m_size = o.m_size; m_capacity = o.m_capacity;
+                o.m_data = nullptr; o.m_size = 0; o.m_capacity = 0;
+            }
+            return *this;
+        }
+
+        void clear() { m_size = 0; }
+        const Ch *data() const { return m_data; }
+        std::size_t size() const { return m_size; }
+
+        inline void ensure(std::size_t additional) {
+            if (__builtin_expect(m_size + additional <= m_capacity, 1)) return;
+            grow(m_size + additional);
+        }
+        void append(const Ch *src, std::size_t n) {
+            ensure(n);
+            std::memcpy(m_data + m_size, src, n * sizeof(Ch));
+            m_size += n;
+        }
+        void append_char(Ch ch) {
+            ensure(1);
+            m_data[m_size++] = ch;
+        }
+        void append_fill(Ch ch, std::size_t n) {
+            ensure(n);
+            std::memset(m_data + m_size, static_cast<unsigned char>(ch), n);
+            m_size += n;
+        }
+        Ch *reserve_raw(std::size_t n) {
+            ensure(n);
+            return m_data + m_size;
+        }
+        void advance(std::size_t n) { m_size += n; }
+    };
 
     ///////////////////////////////////////////////////////////////////////
     // Printing flags
@@ -32,365 +125,316 @@ namespace rapidxml
         ///////////////////////////////////////////////////////////////////////////
         // Internal character operations
 
-        // Copy characters from given range to given output iterator
-        template<class OutIt, class Ch>
-        inline OutIt copy_chars(const Ch *begin, const Ch *end, OutIt out)
+        // Find character
+        template<class Ch, Ch ch>
+        inline bool find_char(const Ch *begin, const Ch *end)
         {
-            while (begin != end)
-                *out++ = *begin++;
-            return out;
+            static_assert(sizeof(Ch) == 1, "SIMD print path requires byte-sized Ch");
+            return std::memchr(begin, static_cast<unsigned char>(ch),
+                               static_cast<std::size_t>(end - begin)) != nullptr;
         }
 
-        // Copy characters from given range to given output iterator and expand
-        // characters into references (&lt; &gt; &apos; &quot; &amp;)
-        template<class OutIt, class Ch>
-        inline OutIt copy_and_expand_chars(const Ch *begin, const Ch *end, Ch noexpand, OutIt out)
+        ///////////////////////////////////////////////////////////////////////////
+        // Internal printing (PrintBuffer: chunk ensure + raw writes)
+
+        // Expand characters into entity references, writing directly into buf
+        template<class Ch, class Alloc, std::size_t N>
+        inline void expand_chars(PrintBuffer<Ch, Alloc, N> &buf,
+                                     const Ch *begin, const Ch *end, Ch noexpand)
         {
+            static_assert(sizeof(Ch) == 1, "SIMD print path requires byte-sized Ch");
+            const std::size_t len = static_cast<std::size_t>(end - begin);
+            Ch *p = buf.reserve_raw(len * 6);  // worst case: all &apos;
+            Ch *start = p;
             while (begin != end)
             {
                 if (*begin == noexpand)
                 {
-                    *out++ = *begin;    // No expansion, copy character
+                    *p++ = *begin;
                 }
                 else
                 {
                     switch (*begin)
                     {
                     case Ch('<'):
-                        *out++ = Ch('&'); *out++ = Ch('l'); *out++ = Ch('t'); *out++ = Ch(';');
+                        std::memcpy(p, "&lt;", 4); p += 4;
                         break;
                     case Ch('>'):
-                        *out++ = Ch('&'); *out++ = Ch('g'); *out++ = Ch('t'); *out++ = Ch(';');
+                        std::memcpy(p, "&gt;", 4); p += 4;
                         break;
                     case Ch('\''):
-                        *out++ = Ch('&'); *out++ = Ch('a'); *out++ = Ch('p'); *out++ = Ch('o'); *out++ = Ch('s'); *out++ = Ch(';');
+                        std::memcpy(p, "&apos;", 6); p += 6;
                         break;
                     case Ch('"'):
-                        *out++ = Ch('&'); *out++ = Ch('q'); *out++ = Ch('u'); *out++ = Ch('o'); *out++ = Ch('t'); *out++ = Ch(';');
+                        std::memcpy(p, "&quot;", 6); p += 6;
                         break;
                     case Ch('&'):
-                        *out++ = Ch('&'); *out++ = Ch('a'); *out++ = Ch('m'); *out++ = Ch('p'); *out++ = Ch(';');
+                        std::memcpy(p, "&amp;", 5); p += 5;
                         break;
                     default:
-                        *out++ = *begin;    // No expansion, copy character
+                        *p++ = *begin;
                     }
                 }
-                ++begin;    // Step to next character
+                ++begin;
             }
-            return out;
+            buf.advance(static_cast<std::size_t>(p - start));
         }
 
-        // Fill given output iterator with repetitions of the same character
-        template<class OutIt, class Ch>
-        inline OutIt fill_chars(OutIt out, int n, Ch ch)
-        {
-            for (int i = 0; i < n; ++i)
-                *out++ = ch;
-            return out;
-        }
+        // Forward declaration
+        template<class Ch, class Alloc, std::size_t N>
+        inline void print_node(PrintBuffer<Ch, Alloc, N> &buf,
+                                   const xml_node<Ch> *node, int flags, int indent);
 
-        // Find character
-        template<class Ch, Ch ch>
-        inline bool find_char(const Ch *begin, const Ch *end)
-        {
-            while (begin != end)
-                if (*begin++ == ch)
-                    return true;
-            return false;
-        }
-
-        ///////////////////////////////////////////////////////////////////////////
-        // Internal printing operations
-
-        // Print node
-        template<class OutIt, class Ch>
-        inline OutIt print_node(OutIt out, const xml_node<Ch> *node, int flags, int indent);
-
-        // Print children of the node
-        template<class OutIt, class Ch>
-        inline OutIt print_children(OutIt out, const xml_node<Ch> *node, int flags, int indent)
+        template<class Ch, class Alloc, std::size_t N>
+        inline void print_children(PrintBuffer<Ch, Alloc, N> &buf,
+                                       const xml_node<Ch> *node, int flags, int indent)
         {
             for (xml_node<Ch> *child = node->first_node(); child; child = child->next_sibling())
-                out = print_node(out, child, flags, indent);
-            return out;
+                print_node(buf, child, flags, indent);
         }
 
-        // Print attributes of the node
-        template<class OutIt, class Ch>
-        inline OutIt print_attributes(OutIt out, const xml_node<Ch> *node, int)
+        template<class Ch, class Alloc, std::size_t N>
+        inline void print_attributes(PrintBuffer<Ch, Alloc, N> &buf,
+                                         const xml_node<Ch> *node, int)
         {
-            for (xml_attribute<Ch> *attribute = node->first_attribute(); attribute; attribute = attribute->next_attribute())
+            for (xml_attribute<Ch> *attr = node->first_attribute(); attr; attr = attr->next_attribute())
             {
-                if (attribute->name() && attribute->value())
+                if (attr->name() && attr->value())
                 {
-                    // Print attribute name
-                    *out = Ch(' '), ++out;
-                    out = copy_chars(attribute->name(), attribute->name() + attribute->name_size(), out);
-                    *out = Ch('='), ++out;
-                    // Print attribute value using appropriate quote type
-                    if (find_char<Ch, Ch('\'')>(attribute->value(), attribute->value() + attribute->value_size()))
+                    const Ch *aname = attr->name();
+                    const std::size_t aname_size = attr->name_size();
+                    const Ch *avalue = attr->value();
+                    const std::size_t avalue_size = attr->value_size();
+
+                    if (find_char<Ch, Ch('\'')>(avalue, avalue + avalue_size))
                     {
-                        *out = Ch('"'), ++out;
-                        out = copy_and_expand_chars(attribute->value(), attribute->value() + attribute->value_size(), Ch('\''), out);
-                        *out = Ch('"'), ++out;
+                        // ' name="...escaped..."'
+                        Ch *p = buf.reserve_raw(1 + aname_size + 2);
+                        *p++ = Ch(' ');
+                        std::memcpy(p, aname, aname_size); p += aname_size;
+                        std::memcpy(p, "=\"", 2); p += 2;
+                        buf.advance(1 + aname_size + 2);
+                        expand_chars(buf, avalue, avalue + avalue_size, Ch('\''));
+                        buf.append_char(Ch('"'));
                     }
                     else
                     {
-                        *out = Ch('\''), ++out;
-                        out = copy_and_expand_chars(attribute->value(), attribute->value() + attribute->value_size(), Ch('"'), out);
-                        *out = Ch('\''), ++out;
+                        // " name='...escaped...'"
+                        Ch *p = buf.reserve_raw(1 + aname_size + 2);
+                        *p++ = Ch(' ');
+                        std::memcpy(p, aname, aname_size); p += aname_size;
+                        std::memcpy(p, "=\'", 2); p += 2;
+                        buf.advance(1 + aname_size + 2);
+                        expand_chars(buf, avalue, avalue + avalue_size, Ch('"'));
+                        buf.append_char(Ch('\''));
                     }
                 }
             }
-            return out;
         }
 
-        // Print data node
-        template<class OutIt, class Ch>
-        inline OutIt print_data_node(OutIt out, const xml_node<Ch> *node, int flags, int indent)
+        template<class Ch, class Alloc, std::size_t N>
+        inline void print_data_node(PrintBuffer<Ch, Alloc, N> &buf,
+                                        const xml_node<Ch> *node, int flags, int indent)
         {
-            assert(node->type() == node_data);
             if (!(flags & print_no_indenting))
-                out = fill_chars(out, indent, Ch(' '));
-            out = copy_and_expand_chars(node->value(), node->value() + node->value_size(), Ch(0), out);
-            return out;
+                buf.append_fill(Ch(' '), indent);
+            expand_chars(buf, node->value(), node->value() + node->value_size(), Ch(0));
         }
 
-        // Print data node
-        template<class OutIt, class Ch>
-        inline OutIt print_cdata_node(OutIt out, const xml_node<Ch> *node, int flags, int indent)
+        template<class Ch, class Alloc, std::size_t N>
+        inline void print_cdata_node(PrintBuffer<Ch, Alloc, N> &buf,
+                                         const xml_node<Ch> *node, int flags, int indent)
         {
-            assert(node->type() == node_cdata);
             if (!(flags & print_no_indenting))
-                out = fill_chars(out, indent, Ch(' '));
-            *out = Ch('<'); ++out;
-            *out = Ch('!'); ++out;
-            *out = Ch('['); ++out;
-            *out = Ch('C'); ++out;
-            *out = Ch('D'); ++out;
-            *out = Ch('A'); ++out;
-            *out = Ch('T'); ++out;
-            *out = Ch('A'); ++out;
-            *out = Ch('['); ++out;
-            out = copy_chars(node->value(), node->value() + node->value_size(), out);
-            *out = Ch(']'); ++out;
-            *out = Ch(']'); ++out;
-            *out = Ch('>'); ++out;
-            return out;
+                buf.append_fill(Ch(' '), indent);
+            // Single ensure for: <![CDATA[ + value + ]]>
+            const std::size_t val_size = node->value_size();
+            Ch *p = buf.reserve_raw(9 + val_size + 3);
+            std::memcpy(p, "<![CDATA[", 9); p += 9;
+            std::memcpy(p, node->value(), val_size); p += val_size;
+            std::memcpy(p, "]]>", 3);
+            buf.advance(9 + val_size + 3);
         }
 
-        // Print element node
-        template<class OutIt, class Ch>
-        inline OutIt print_element_node(OutIt out, const xml_node<Ch> *node, int flags, int indent)
+        template<class Ch, class Alloc, std::size_t N>
+        inline void print_element_node(PrintBuffer<Ch, Alloc, N> &buf,
+                                           const xml_node<Ch> *node, int flags, int indent)
         {
-            assert(node->type() == node_element);
+            const Ch *name = node->name();
+            const std::size_t name_size = node->name_size();
 
-            // Print element name and attributes, if any
             if (!(flags & print_no_indenting))
-                out = fill_chars(out, indent, Ch(' '));
-            *out = Ch('<'), ++out;
-            out = copy_chars(node->name(), node->name() + node->name_size(), out);
-            out = print_attributes(out, node, flags);
+                buf.append_fill(Ch(' '), indent);
 
-            // If node is childless
+            // Opening: '<' + name
+            {
+                Ch *p = buf.reserve_raw(1 + name_size);
+                *p = Ch('<');
+                std::memcpy(p + 1, name, name_size);
+                buf.advance(1 + name_size);
+            }
+
+            print_attributes(buf, node, flags);
+
             if (node->value_size() == 0 && !node->first_node())
             {
-                // Print childless node tag ending
-                *out = Ch('/'), ++out;
-                *out = Ch('>'), ++out;
+                // Self-closing: '/>'
+                Ch *p = buf.reserve_raw(2);
+                std::memcpy(p, "/>", 2);
+                buf.advance(2);
             }
             else
             {
-                // Print normal node tag ending
-                *out = Ch('>'), ++out;
+                buf.append_char(Ch('>'));
 
-                // Test if node contains a single data node only (and no other nodes)
                 xml_node<Ch> *child = node->first_node();
                 if (!child)
                 {
-                    // If node has no children, only print its value without indenting
-                    out = copy_and_expand_chars(node->value(), node->value() + node->value_size(), Ch(0), out);
+                    expand_chars(buf, node->value(), node->value() + node->value_size(), Ch(0));
                 }
                 else if (child->next_sibling() == 0 && child->type() == node_data)
                 {
-                    // If node has a sole data child, only print its value without indenting
-                    out = copy_and_expand_chars(child->value(), child->value() + child->value_size(), Ch(0), out);
+                    expand_chars(buf, child->value(), child->value() + child->value_size(), Ch(0));
                 }
                 else
                 {
-                    // Print all children with full indenting
                     if (!(flags & print_no_indenting))
-                        *out = Ch('\n'), ++out;
-                    out = print_children(out, node, flags, indent + 2);
+                        buf.append_char(Ch('\n'));
+                    print_children(buf, node, flags, indent + 2);
                     if (!(flags & print_no_indenting))
-                        out = fill_chars(out, indent, Ch(' '));
+                        buf.append_fill(Ch(' '), indent);
                 }
 
-                // Print node end
-                *out = Ch('<'), ++out;
-                *out = Ch('/'), ++out;
-                out = copy_chars(node->name(), node->name() + node->name_size(), out);
-                *out = Ch('>'), ++out;
+                // Closing: '</' + name + '>'
+                {
+                    const std::size_t total = 2 + name_size + 1;
+                    Ch *p = buf.reserve_raw(total);
+                    std::memcpy(p, "</", 2);
+                    std::memcpy(p + 2, name, name_size);
+                    p[2 + name_size] = Ch('>');
+                    buf.advance(total);
+                }
             }
-            return out;
         }
 
-        // Print declaration node
-        template<class OutIt, class Ch>
-        inline OutIt print_declaration_node(OutIt out, const xml_node<Ch> *node, int flags, int indent)
+        template<class Ch, class Alloc, std::size_t N>
+        inline void print_declaration_node(PrintBuffer<Ch, Alloc, N> &buf,
+                                               const xml_node<Ch> *node, int flags, int indent)
         {
-            // Print declaration start
             if (!(flags & print_no_indenting))
-                out = fill_chars(out, indent, Ch(' '));
-            *out = Ch('<'), ++out;
-            *out = Ch('?'), ++out;
-            *out = Ch('x'), ++out;
-            *out = Ch('m'), ++out;
-            *out = Ch('l'), ++out;
-
-            // Print attributes
-            out = print_attributes(out, node, flags);
-
-            // Print declaration end
-            *out = Ch('?'), ++out;
-            *out = Ch('>'), ++out;
-
-            return out;
+                buf.append_fill(Ch(' '), indent);
+            buf.append(reinterpret_cast<const Ch *>("<?xml"), 5);
+            print_attributes(buf, node, flags);
+            Ch *p = buf.reserve_raw(2);
+            std::memcpy(p, "?>", 2);
+            buf.advance(2);
         }
 
-        // Print comment node
-        template<class OutIt, class Ch>
-        inline OutIt print_comment_node(OutIt out, const xml_node<Ch> *node, int flags, int indent)
+        template<class Ch, class Alloc, std::size_t N>
+        inline void print_comment_node(PrintBuffer<Ch, Alloc, N> &buf,
+                                           const xml_node<Ch> *node, int flags, int indent)
         {
-            assert(node->type() == node_comment);
             if (!(flags & print_no_indenting))
-                out = fill_chars(out, indent, Ch(' '));
-            *out = Ch('<'), ++out;
-            *out = Ch('!'), ++out;
-            *out = Ch('-'), ++out;
-            *out = Ch('-'), ++out;
-            out = copy_chars(node->value(), node->value() + node->value_size(), out);
-            *out = Ch('-'), ++out;
-            *out = Ch('-'), ++out;
-            *out = Ch('>'), ++out;
-            return out;
+                buf.append_fill(Ch(' '), indent);
+            // Single ensure for: <!-- + value + -->
+            const std::size_t val_size = node->value_size();
+            Ch *p = buf.reserve_raw(4 + val_size + 3);
+            std::memcpy(p, "<!--", 4);
+            p += 4;
+            std::memcpy(p, node->value(), val_size);
+            p += val_size;
+            std::memcpy(p, "-->", 3);
+            buf.advance(4 + val_size + 3);
         }
 
-        // Print doctype node
-        template<class OutIt, class Ch>
-        inline OutIt print_doctype_node(OutIt out, const xml_node<Ch> *node, int flags, int indent)
+        template<class Ch, class Alloc, std::size_t N>
+        inline void print_doctype_node(PrintBuffer<Ch, Alloc, N> &buf,
+                                           const xml_node<Ch> *node, int flags, int indent)
         {
-            assert(node->type() == node_doctype);
             if (!(flags & print_no_indenting))
-                out = fill_chars(out, indent, Ch(' '));
-            *out = Ch('<'), ++out;
-            *out = Ch('!'), ++out;
-            *out = Ch('D'), ++out;
-            *out = Ch('O'), ++out;
-            *out = Ch('C'), ++out;
-            *out = Ch('T'), ++out;
-            *out = Ch('Y'), ++out;
-            *out = Ch('P'), ++out;
-            *out = Ch('E'), ++out;
-            *out = Ch(' '), ++out;
-            out = copy_chars(node->value(), node->value() + node->value_size(), out);
-            *out = Ch('>'), ++out;
-            return out;
+                buf.append_fill(Ch(' '), indent);
+            // Single ensure for: <!DOCTYPE  + value + >
+            const std::size_t val_size = node->value_size();
+            Ch *p = buf.reserve_raw(10 + val_size + 1);
+            std::memcpy(p, "<!DOCTYPE ", 10);
+            p += 10;
+            std::memcpy(p, node->value(), val_size);
+            p += val_size;
+            *p = Ch('>');
+            buf.advance(10 + val_size + 1);
         }
 
-        // Print pi node
-        template<class OutIt, class Ch>
-        inline OutIt print_pi_node(OutIt out, const xml_node<Ch> *node, int flags, int indent)
+        template<class Ch, class Alloc, std::size_t N>
+        inline void print_pi_node(PrintBuffer<Ch, Alloc, N> &buf,
+                                      const xml_node<Ch> *node, int flags, int indent)
         {
-            assert(node->type() == node_pi);
             if (!(flags & print_no_indenting))
-                out = fill_chars(out, indent, Ch(' '));
-            *out = Ch('<'), ++out;
-            *out = Ch('?'), ++out;
-            out = copy_chars(node->name(), node->name() + node->name_size(), out);
-            *out = Ch(' '), ++out;
-            out = copy_chars(node->value(), node->value() + node->value_size(), out);
-            *out = Ch('?'), ++out;
-            *out = Ch('>'), ++out;
-            return out;
+                buf.append_fill(Ch(' '), indent);
+            // Single ensure for: <? + name + ' ' + value + ?>
+            const std::size_t name_size = node->name_size();
+            const std::size_t val_size = node->value_size();
+            const std::size_t total = 2 + name_size + 1 + val_size + 2;
+            Ch *p = buf.reserve_raw(total);
+            std::memcpy(p, "<?", 2);
+            p += 2;
+            std::memcpy(p, node->name(), name_size);
+            p += name_size;
+            *p++ = Ch(' ');
+            std::memcpy(p, node->value(), val_size);
+            p += val_size;
+            std::memcpy(p, "?>", 2);
+            buf.advance(total);
         }
 
-        // Print literal node
-        template<class OutIt, class Ch>
-        inline OutIt print_literal_node(OutIt out, const xml_node<Ch> *node, int flags, int indent)
+        template<class Ch, class Alloc, std::size_t N>
+        inline void print_literal_node(PrintBuffer<Ch, Alloc, N> &buf,
+                                           const xml_node<Ch> *node, int flags, int indent)
         {
-            assert(node->type() == node_literal);
             if (!(flags & print_no_indenting))
-                out = fill_chars(out, indent, Ch(' '));
-            out = copy_chars(node->value(), node->value() + node->value_size(), out);
-            return out;
+                buf.append_fill(Ch(' '), indent);
+            buf.append(node->value(), node->value_size());
         }
 
-        // Print node
-        // Print node
-        template<class OutIt, class Ch>
-        inline OutIt print_node(OutIt out, const xml_node<Ch> *node, int flags, int indent)
+        template<class Ch, class Alloc, std::size_t N>
+        inline void print_node(PrintBuffer<Ch, Alloc, N> &buf,
+                                   const xml_node<Ch> *node, int flags, int indent)
         {
-            // Print proper node type
             switch (node->type())
             {
-
-            // Document
             case node_document:
-                out = print_children(out, node, flags, indent);
+                print_children(buf, node, flags, indent);
                 break;
-
-            // Element
             case node_element:
-                out = print_element_node(out, node, flags, indent);
+                print_element_node(buf, node, flags, indent);
                 break;
-
-            // Data
             case node_data:
-                out = print_data_node(out, node, flags, indent);
+                print_data_node(buf, node, flags, indent);
                 break;
-
-            // CDATA
             case node_cdata:
-                out = print_cdata_node(out, node, flags, indent);
+                print_cdata_node(buf, node, flags, indent);
                 break;
-
-            // Declaration
             case node_declaration:
-                out = print_declaration_node(out, node, flags, indent);
+                print_declaration_node(buf, node, flags, indent);
                 break;
-
-            // Comment
             case node_comment:
-                out = print_comment_node(out, node, flags, indent);
+                print_comment_node(buf, node, flags, indent);
                 break;
-
-            // Doctype
             case node_doctype:
-                out = print_doctype_node(out, node, flags, indent);
+                print_doctype_node(buf, node, flags, indent);
                 break;
-
-            // Pi
             case node_pi:
-                out = print_pi_node(out, node, flags, indent);
+                print_pi_node(buf, node, flags, indent);
                 break;
-
             case node_literal:
-                out = print_literal_node(out, node, flags, indent);
+                print_literal_node(buf, node, flags, indent);
                 break;
-
-                // Unknown
             default:
                 assert(0);
                 break;
             }
 
-            // If indenting not disabled, add line break after node
             if (!(flags & print_no_indenting))
-                *out = Ch('\n'), ++out;
-
-            // Return modified iterator
-            return out;
+                buf.append_char(Ch('\n'));
         }
 
     }
@@ -399,15 +443,11 @@ namespace rapidxml
     ///////////////////////////////////////////////////////////////////////////
     // Printing
 
-    //! Prints XML to given output iterator.
-    //! \param out Output iterator to print to.
-    //! \param node Node to be printed. Pass xml_document to print entire document.
-    //! \param flags Flags controlling how XML is printed.
-    //! \return Output iterator pointing to position immediately after last character of printed text.
-    template<class OutIt, class Ch>
-    inline OutIt print(OutIt out, const xml_node<Ch> &node, int flags = 0)
+    //! Prints XML into a PrintBuffer.
+    template<class Ch, class Alloc, std::size_t N>
+    inline void print(PrintBuffer<Ch, Alloc, N> &buf, const xml_node<Ch> &node, int flags = 0)
     {
-        return internal::print_node(out, &node, flags, 0);
+        internal::print_node(buf, &node, flags, 0);
     }
 
 #ifndef RAPIDXML_NO_STREAMS
@@ -420,7 +460,9 @@ namespace rapidxml
     template<class Ch>
     inline std::basic_ostream<Ch> &print(std::basic_ostream<Ch> &out, const xml_node<Ch> &node, int flags = 0)
     {
-        print(std::ostream_iterator<Ch>(out), node, flags);
+        PrintBuffer<Ch> buf;
+        internal::print_node(buf, &node, flags, 0);
+        out.write(buf.data(), static_cast<std::streamsize>(buf.size()));
         return out;
     }
 
