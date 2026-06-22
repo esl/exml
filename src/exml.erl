@@ -206,7 +206,8 @@ to_iolist(Elements, Pretty) when is_list(Elements) ->
 
 -spec to_binary_nif(element(), prettify()) -> binary().
 to_binary_nif(#xmlel{} = Element, Pretty) ->
-    case catch exml_nif:to_binary(Element, Pretty) of
-        {'EXIT', Reason} -> erlang:error({badxml, Element, Reason});
+    try exml_nif:to_binary(Element, Pretty) of
         Result when is_binary(Result) -> Result
+    catch
+        _Class:Reason -> erlang:error({badxml, Element, Reason})
     end.
