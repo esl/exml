@@ -12,7 +12,7 @@ jobs:
     name: Test OTP ${{matrix.otp_vsn}}
     strategy:
       matrix:
-        otp_vsn: ['28', '27', '26']
+        otp_vsn: ['29', '28', '27']
         rebar_vsn: ['3.27']
     runs-on: 'ubuntu-24.04'
     env:
@@ -44,7 +44,7 @@ jobs:
     name: Benchmark suite execution OTP ${{matrix.otp_vsn}}
     strategy:
       matrix:
-        otp_vsn: ['28', '27']
+        otp_vsn: ['29', '28']
         elixir_vsn: ['1.19']
         rebar_vsn: ['3.27']
     runs-on: 'ubuntu-24.04'
